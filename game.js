@@ -38,6 +38,21 @@ const gameState = {
     rooms: []
 };
 
+// Viewport State for zoom and pan
+const viewport = {
+    scale: 1,          // Current zoom level
+    minScale: 0.5,     // Minimum zoom (zoomed out)
+    maxScale: 3,       // Maximum zoom (zoomed in)
+    offsetX: 0,        // Pan offset X
+    offsetY: 0,        // Pan offset Y
+    isDragging: false, // Is user dragging the viewport
+    isZooming: false,  // Is user performing pinch zoom
+    lastTouchDistance: 0, // Last distance between two touch points
+    dragStartX: 0,     // Drag start position X
+    dragStartY: 0,     // Drag start position Y
+    touches: []        // Active touches for gesture detection
+};
+
 // Room Templates
 const roomTemplates = [
     {
@@ -891,10 +906,157 @@ function setupCharacterMenu() {
     });
 }
 
+// Viewport Zoom and Pan Controls
+function setupViewportControls() {
+    const canvasWrapper = document.querySelector('.canvas-wrapper');
+
+    if (!canvasWrapper) {
+        console.error('Canvas wrapper not found!');
+        return;
+    }
+
+    // Helper: Get distance between two touch points
+    function getTouchDistance(touch1, touch2) {
+        const dx = touch2.clientX - touch1.clientX;
+        const dy = touch2.clientY - touch1.clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    // Helper: Get center point between two touches
+    function getTouchCenter(touch1, touch2) {
+        return {
+            x: (touch1.clientX + touch2.clientX) / 2,
+            y: (touch1.clientY + touch2.clientY) / 2
+        };
+    }
+
+    // Helper: Check if touch is on canvas area
+    function isTouchOnCanvas(touch) {
+        const rect = canvas.getBoundingClientRect();
+        return touch.clientX >= rect.left && touch.clientX <= rect.right &&
+               touch.clientY >= rect.top && touch.clientY <= rect.bottom;
+    }
+
+    // Helper: Convert screen coordinates to canvas coordinates
+    function screenToCanvas(screenX, screenY) {
+        const rect = canvas.getBoundingClientRect();
+        const x = ((screenX - rect.left) - viewport.offsetX) / viewport.scale;
+        const y = ((screenY - rect.top) - viewport.offsetY) / viewport.scale;
+        return { x, y };
+    }
+
+    // Touch Start Handler
+    function handleTouchStart(e) {
+        // Only handle touches on canvas
+        const touchesOnCanvas = Array.from(e.touches).filter(isTouchOnCanvas);
+        if (touchesOnCanvas.length === 0) return;
+
+        e.preventDefault();
+        viewport.touches = touchesOnCanvas;
+
+        if (touchesOnCanvas.length === 2) {
+            // Two fingers - prepare for zoom
+            viewport.isZooming = true;
+            viewport.isDragging = false;
+            viewport.lastTouchDistance = getTouchDistance(touchesOnCanvas[0], touchesOnCanvas[1]);
+        } else if (touchesOnCanvas.length === 1) {
+            // One finger - prepare for pan
+            viewport.isDragging = true;
+            viewport.isZooming = false;
+            viewport.dragStartX = touchesOnCanvas[0].clientX - viewport.offsetX;
+            viewport.dragStartY = touchesOnCanvas[0].clientY - viewport.offsetY;
+        }
+    }
+
+    // Touch Move Handler
+    function handleTouchMove(e) {
+        const touchesOnCanvas = Array.from(e.touches).filter(isTouchOnCanvas);
+        if (touchesOnCanvas.length === 0 && !viewport.isDragging && !viewport.isZooming) return;
+
+        e.preventDefault();
+        viewport.touches = touchesOnCanvas;
+
+        if (viewport.isZooming && touchesOnCanvas.length === 2) {
+            // Pinch to zoom
+            const currentDistance = getTouchDistance(touchesOnCanvas[0], touchesOnCanvas[1]);
+            const distanceDelta = currentDistance - viewport.lastTouchDistance;
+
+            // Calculate zoom factor based on pinch distance change
+            const zoomDelta = distanceDelta * 0.01;
+            const oldScale = viewport.scale;
+            viewport.scale = Math.max(viewport.minScale, Math.min(viewport.maxScale, viewport.scale + zoomDelta));
+
+            // Get center point of pinch for zoom origin
+            const center = getTouchCenter(touchesOnCanvas[0], touchesOnCanvas[1]);
+            const rect = canvas.getBoundingClientRect();
+            const canvasX = center.x - rect.left;
+            const canvasY = center.y - rect.top;
+
+            // Adjust offset to zoom towards pinch center
+            const scaleFactor = viewport.scale / oldScale;
+            viewport.offsetX = canvasX - (canvasX - viewport.offsetX) * scaleFactor;
+            viewport.offsetY = canvasY - (canvasY - viewport.offsetY) * scaleFactor;
+
+            viewport.lastTouchDistance = currentDistance;
+        } else if (viewport.isDragging && touchesOnCanvas.length === 1) {
+            // Pan the viewport
+            viewport.offsetX = touchesOnCanvas[0].clientX - viewport.dragStartX;
+            viewport.offsetY = touchesOnCanvas[0].clientY - viewport.dragStartY;
+        }
+    }
+
+    // Touch End Handler
+    function handleTouchEnd(e) {
+        e.preventDefault();
+        const touchesOnCanvas = Array.from(e.touches).filter(isTouchOnCanvas);
+        viewport.touches = touchesOnCanvas;
+
+        if (touchesOnCanvas.length < 2) {
+            viewport.isZooming = false;
+        }
+        if (touchesOnCanvas.length === 0) {
+            viewport.isDragging = false;
+        } else if (touchesOnCanvas.length === 1 && !viewport.isZooming) {
+            // Continue dragging with remaining finger
+            viewport.isDragging = true;
+            viewport.dragStartX = touchesOnCanvas[0].clientX - viewport.offsetX;
+            viewport.dragStartY = touchesOnCanvas[0].clientY - viewport.offsetY;
+        }
+    }
+
+    // Mouse Wheel Zoom (for desktop)
+    function handleWheel(e) {
+        if (!isTouchOnCanvas({ clientX: e.clientX, clientY: e.clientY })) return;
+
+        e.preventDefault();
+
+        const zoomDelta = e.deltaY > 0 ? -0.1 : 0.1;
+        const oldScale = viewport.scale;
+        viewport.scale = Math.max(viewport.minScale, Math.min(viewport.maxScale, viewport.scale + zoomDelta));
+
+        // Zoom towards mouse position
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+
+        const scaleFactor = viewport.scale / oldScale;
+        viewport.offsetX = canvasX - (canvasX - viewport.offsetX) * scaleFactor;
+        viewport.offsetY = canvasY - (canvasY - viewport.offsetY) * scaleFactor;
+    }
+
+    // Attach event listeners to canvas wrapper
+    canvasWrapper.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvasWrapper.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvasWrapper.addEventListener('touchend', handleTouchEnd, { passive: false });
+    canvasWrapper.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+    canvasWrapper.addEventListener('wheel', handleWheel, { passive: false });
+}
+
 // Initialize game
 function initGame() {
     setupVirtualJoystick();
     setupCharacterMenu();
+    setupViewportControls();
     updateUI();
     showMessage('Welcome to the dungeon! Explore and defeat enemies!');
     gameLoop();
@@ -909,11 +1071,20 @@ if (document.readyState === 'loading') {
 
 // Game Loop
 function gameLoop() {
-    // Clear canvas with dungeon floor
+    // Clear canvas
     ctx.fillStyle = '#2c2c2c';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Draw floor tiles
+    gameState.gameTime++;
+
+    // Save context state and apply viewport transformation
+    ctx.save();
+    ctx.translate(viewport.offsetX, viewport.offsetY);
+    ctx.scale(viewport.scale, viewport.scale);
+
+    // Draw floor tiles (after transformation so they zoom/pan too)
+    ctx.fillStyle = '#2c2c2c';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     ctx.fillStyle = '#3a3a3a';
     for (let x = 0; x < GRID_WIDTH; x++) {
         for (let y = 0; y < GRID_HEIGHT; y++) {
@@ -922,8 +1093,6 @@ function gameLoop() {
             }
         }
     }
-
-    gameState.gameTime++;
 
     // Draw dungeon elements
     drawWalls();
@@ -950,6 +1119,9 @@ function gameLoop() {
             gameState.particles.splice(i, 1);
         }
     }
+
+    // Restore context state
+    ctx.restore();
 
     // Update message timer
     if (gameState.messageTimer > 0) {
