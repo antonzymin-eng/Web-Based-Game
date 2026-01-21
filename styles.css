@@ -147,6 +147,17 @@ body {
     border: 1px solid #FFD700;
 }
 
+.zoom-indicator {
+    color: #4CAF50;
+    font-weight: bold;
+    font-size: 0.9em;
+    padding: 5px 10px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 6px;
+    border: 1px solid #4CAF50;
+    transition: opacity 0.3s ease;
+}
+
 .game-messages-inline {
     flex: 1;
     text-align: center;
@@ -414,6 +425,11 @@ body {
 
     .quick-level {
         font-size: 1em;
+        padding: 4px 8px;
+    }
+
+    .zoom-indicator {
+        font-size: 0.8em;
         padding: 4px 8px;
     }
 
