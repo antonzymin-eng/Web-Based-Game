@@ -1,8 +1,9 @@
 // Game Constants
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
-const GRAVITY = 0.6;
-const FRICTION = 0.8;
+const TILE_SIZE = 40;
+const GRID_WIDTH = CANVAS_WIDTH / TILE_SIZE;
+const GRID_HEIGHT = CANVAS_HEIGHT / TILE_SIZE;
 
 // Get canvas and context
 const canvas = document.getElementById('gameCanvas');
@@ -14,13 +15,78 @@ canvas.height = CANVAS_HEIGHT;
 const gameState = {
     keys: {},
     enemies: [],
-    platforms: [],
+    walls: [],
+    doors: [],
+    chests: [],
     particles: [],
     enemiesDefeated: 0,
+    chestsOpened: 0,
     gameTime: 0,
     message: '',
-    messageTimer: 0
+    messageTimer: 0,
+    currentRoom: 0,
+    rooms: []
 };
+
+// Room Templates
+const roomTemplates = [
+    {
+        walls: [
+            // Border walls
+            ...Array.from({ length: GRID_WIDTH }, (_, i) => ({ x: i, y: 0 })),
+            ...Array.from({ length: GRID_WIDTH }, (_, i) => ({ x: i, y: GRID_HEIGHT - 1 })),
+            ...Array.from({ length: GRID_HEIGHT }, (_, i) => ({ x: 0, y: i })),
+            ...Array.from({ length: GRID_HEIGHT }, (_, i) => ({ x: GRID_WIDTH - 1, y: i })),
+            // Interior walls
+            { x: 5, y: 5 }, { x: 6, y: 5 }, { x: 7, y: 5 },
+            { x: 14, y: 10 }, { x: 14, y: 11 }, { x: 14, y: 12 }
+        ],
+        doors: [{ x: 10, y: GRID_HEIGHT - 1, toRoom: 1 }],
+        chests: [{ x: 3, y: 3, opened: false }],
+        enemies: [
+            { x: 12 * TILE_SIZE, y: 8 * TILE_SIZE, type: 'basic' },
+            { x: 6 * TILE_SIZE, y: 10 * TILE_SIZE, type: 'basic' }
+        ]
+    },
+    {
+        walls: [
+            ...Array.from({ length: GRID_WIDTH }, (_, i) => ({ x: i, y: 0 })),
+            ...Array.from({ length: GRID_WIDTH }, (_, i) => ({ x: i, y: GRID_HEIGHT - 1 })),
+            ...Array.from({ length: GRID_HEIGHT }, (_, i) => ({ x: 0, y: i })),
+            ...Array.from({ length: GRID_HEIGHT }, (_, i) => ({ x: GRID_WIDTH - 1, y: i })),
+            { x: 8, y: 7 }, { x: 9, y: 7 }, { x: 10, y: 7 }, { x: 11, y: 7 }, { x: 12, y: 7 }
+        ],
+        doors: [
+            { x: 10, y: 0, toRoom: 0 },
+            { x: GRID_WIDTH - 1, y: 8, toRoom: 2 }
+        ],
+        chests: [{ x: 15, y: 3, opened: false }],
+        enemies: [
+            { x: 5 * TILE_SIZE, y: 5 * TILE_SIZE, type: 'strong' },
+            { x: 13 * TILE_SIZE, y: 10 * TILE_SIZE, type: 'basic' },
+            { x: 8 * TILE_SIZE, y: 3 * TILE_SIZE, type: 'basic' }
+        ]
+    },
+    {
+        walls: [
+            ...Array.from({ length: GRID_WIDTH }, (_, i) => ({ x: i, y: 0 })),
+            ...Array.from({ length: GRID_WIDTH }, (_, i) => ({ x: i, y: GRID_HEIGHT - 1 })),
+            ...Array.from({ length: GRID_HEIGHT }, (_, i) => ({ x: 0, y: i })),
+            ...Array.from({ length: GRID_HEIGHT }, (_, i) => ({ x: GRID_WIDTH - 1, y: i })),
+            { x: 5, y: 5 }, { x: 6, y: 5 }, { x: 5, y: 6 },
+            { x: 14, y: 8 }, { x: 15, y: 8 }, { x: 14, y: 9 }
+        ],
+        doors: [{ x: 0, y: 8, toRoom: 1 }],
+        chests: [
+            { x: 10, y: 7, opened: false },
+            { x: 17, y: 3, opened: false }
+        ],
+        enemies: [
+            { x: 10 * TILE_SIZE, y: 10 * TILE_SIZE, type: 'strong' },
+            { x: 8 * TILE_SIZE, y: 4 * TILE_SIZE, type: 'strong' }
+        ]
+    }
+];
 
 // Player Class
 class Player {
@@ -28,13 +94,9 @@ class Player {
         this.x = x;
         this.y = y;
         this.width = 30;
-        this.height = 40;
-        this.velocityX = 0;
-        this.velocityY = 0;
-        this.speed = 5;
-        this.jumpPower = 12;
-        this.isGrounded = false;
-        this.direction = 1; // 1 = right, -1 = left
+        this.height = 30;
+        this.speed = 3;
+        this.direction = 0; // 0=down, 1=right, 2=up, 3=left
 
         // RPG Stats
         this.level = 1;
@@ -48,59 +110,78 @@ class Player {
         // Combat
         this.isAttacking = false;
         this.attackCooldown = 0;
-        this.attackRange = 50;
+        this.attackRange = 45;
         this.invulnerable = false;
         this.invulnerableTimer = 0;
+
+        // Movement
+        this.moving = false;
+        this.targetX = x;
+        this.targetY = y;
     }
 
     update() {
-        // Handle movement
+        // Handle movement from keyboard
+        let dx = 0;
+        let dy = 0;
+
+        if (gameState.keys['ArrowUp'] || gameState.keys['w'] || gameState.keys['W']) {
+            dy = -this.speed;
+            this.direction = 2;
+            this.moving = true;
+        }
+        if (gameState.keys['ArrowDown'] || gameState.keys['s'] || gameState.keys['S']) {
+            dy = this.speed;
+            this.direction = 0;
+            this.moving = true;
+        }
         if (gameState.keys['ArrowLeft'] || gameState.keys['a'] || gameState.keys['A']) {
-            this.velocityX = -this.speed;
-            this.direction = -1;
-        } else if (gameState.keys['ArrowRight'] || gameState.keys['d'] || gameState.keys['D']) {
-            this.velocityX = this.speed;
+            dx = -this.speed;
+            this.direction = 3;
+            this.moving = true;
+        }
+        if (gameState.keys['ArrowRight'] || gameState.keys['d'] || gameState.keys['D']) {
+            dx = this.speed;
             this.direction = 1;
-        } else {
-            this.velocityX *= FRICTION;
+            this.moving = true;
         }
 
-        // Handle jumping
-        if ((gameState.keys[' '] || gameState.keys['ArrowUp'] || gameState.keys['w'] || gameState.keys['W']) && this.isGrounded) {
-            this.velocityY = -this.jumpPower;
-            this.isGrounded = false;
+        if (dx === 0 && dy === 0) {
+            this.moving = false;
         }
 
-        // Handle attack
-        if (gameState.keys['f'] || gameState.keys['F']) {
-            this.tryAttack();
+        // Normalize diagonal movement
+        if (dx !== 0 && dy !== 0) {
+            dx *= 0.707;
+            dy *= 0.707;
         }
 
-        // Apply gravity
-        this.velocityY += GRAVITY;
+        // Calculate new position
+        const newX = this.x + dx;
+        const newY = this.y + dy;
 
-        // Update position
-        this.x += this.velocityX;
-        this.y += this.velocityY;
-
-        // Collision with ground
-        if (this.y + this.height >= CANVAS_HEIGHT) {
-            this.y = CANVAS_HEIGHT - this.height;
-            this.velocityY = 0;
-            this.isGrounded = true;
+        // Check collision with walls
+        if (!this.checkWallCollision(newX, this.y)) {
+            this.x = newX;
         }
-
-        // Collision with platforms
-        this.isGrounded = false;
-        for (let platform of gameState.platforms) {
-            if (this.checkPlatformCollision(platform)) {
-                this.isGrounded = true;
-            }
+        if (!this.checkWallCollision(this.x, newY)) {
+            this.y = newY;
         }
 
         // Keep player in bounds
-        if (this.x < 0) this.x = 0;
-        if (this.x + this.width > CANVAS_WIDTH) this.x = CANVAS_WIDTH - this.width;
+        this.x = Math.max(TILE_SIZE, Math.min(this.x, CANVAS_WIDTH - TILE_SIZE - this.width));
+        this.y = Math.max(TILE_SIZE, Math.min(this.y, CANVAS_HEIGHT - TILE_SIZE - this.height));
+
+        // Check door collision
+        this.checkDoorCollision();
+
+        // Check chest collision
+        this.checkChestCollision();
+
+        // Handle attack
+        if (gameState.keys[' '] || gameState.keys['Enter']) {
+            this.tryAttack();
+        }
 
         // Update timers
         if (this.attackCooldown > 0) this.attackCooldown--;
@@ -112,18 +193,70 @@ class Player {
         }
     }
 
-    checkPlatformCollision(platform) {
-        if (this.velocityY >= 0 &&
-            this.x + this.width > platform.x &&
-            this.x < platform.x + platform.width &&
-            this.y + this.height <= platform.y + 10 &&
-            this.y + this.height + this.velocityY >= platform.y) {
+    checkWallCollision(x, y) {
+        const gridX = Math.floor(x / TILE_SIZE);
+        const gridY = Math.floor(y / TILE_SIZE);
+        const gridX2 = Math.floor((x + this.width) / TILE_SIZE);
+        const gridY2 = Math.floor((y + this.height) / TILE_SIZE);
 
-            this.y = platform.y - this.height;
-            this.velocityY = 0;
-            return true;
+        for (let wall of gameState.walls) {
+            if ((wall.x === gridX && wall.y === gridY) ||
+                (wall.x === gridX2 && wall.y === gridY) ||
+                (wall.x === gridX && wall.y === gridY2) ||
+                (wall.x === gridX2 && wall.y === gridY2)) {
+                return true;
+            }
         }
         return false;
+    }
+
+    checkDoorCollision() {
+        const gridX = Math.floor((this.x + this.width / 2) / TILE_SIZE);
+        const gridY = Math.floor((this.y + this.height / 2) / TILE_SIZE);
+
+        for (let door of gameState.doors) {
+            if (door.x === gridX && door.y === gridY) {
+                loadRoom(door.toRoom);
+                return;
+            }
+        }
+    }
+
+    checkChestCollision() {
+        const gridX = Math.floor((this.x + this.width / 2) / TILE_SIZE);
+        const gridY = Math.floor((this.y + this.height / 2) / TILE_SIZE);
+
+        for (let chest of gameState.chests) {
+            if (!chest.opened && chest.x === gridX && chest.y === gridY) {
+                this.openChest(chest);
+            }
+        }
+    }
+
+    openChest(chest) {
+        chest.opened = true;
+        gameState.chestsOpened++;
+
+        // Random reward
+        const reward = Math.random();
+        if (reward < 0.3) {
+            // Health
+            const healAmount = 30;
+            this.health = Math.min(this.maxHealth, this.health + healAmount);
+            showMessage(`Found health potion! +${healAmount} HP`);
+        } else if (reward < 0.6) {
+            // XP
+            const xpAmount = 50;
+            this.gainXP(xpAmount);
+        } else {
+            // Gold (just XP for now)
+            const goldAmount = Math.floor(Math.random() * 50) + 25;
+            this.gainXP(goldAmount);
+            showMessage(`Found ${goldAmount} gold!`);
+        }
+
+        createParticles(chest.x * TILE_SIZE + TILE_SIZE / 2, chest.y * TILE_SIZE + TILE_SIZE / 2, '#ffd700', 15);
+        updateUI();
     }
 
     tryAttack() {
@@ -145,17 +278,16 @@ class Player {
     }
 
     checkAttackHit(enemy) {
-        const attackX = this.direction === 1 ? this.x + this.width : this.x - this.attackRange;
-        const distance = Math.abs((this.x + this.width / 2) - (enemy.x + enemy.width / 2));
-        return distance < this.attackRange + enemy.width / 2 &&
-               Math.abs((this.y + this.height / 2) - (enemy.y + enemy.height / 2)) < 50;
+        const distance = Math.sqrt(
+            Math.pow((this.x + this.width / 2) - (enemy.x + enemy.width / 2), 2) +
+            Math.pow((this.y + this.height / 2) - (enemy.y + enemy.height / 2), 2)
+        );
+        return distance < this.attackRange + enemy.width / 2;
     }
 
     dealDamage(enemy) {
         const damage = Math.max(1, this.attack - enemy.defense / 2);
         enemy.takeDamage(damage);
-
-        // Create hit particles
         createParticles(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, '#ff0000', 5);
     }
 
@@ -192,7 +324,6 @@ class Player {
         this.xp -= this.xpNeeded;
         this.xpNeeded = Math.floor(this.xpNeeded * 1.5);
 
-        // Increase stats
         this.maxHealth += 20;
         this.health = this.maxHealth;
         this.attack += 5;
@@ -211,10 +342,8 @@ class Player {
     }
 
     reset() {
-        this.x = 100;
-        this.y = 100;
-        this.velocityX = 0;
-        this.velocityY = 0;
+        this.x = 3 * TILE_SIZE;
+        this.y = 3 * TILE_SIZE;
         this.level = 1;
         this.xp = 0;
         this.xpNeeded = 100;
@@ -223,15 +352,12 @@ class Player {
         this.attack = 10;
         this.defense = 5;
         gameState.enemiesDefeated = 0;
-        gameState.enemies = [];
+        gameState.chestsOpened = 0;
+        loadRoom(0);
         updateUI();
     }
 
     draw() {
-        // Draw shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-        ctx.fillRect(this.x - 2, this.y + this.height + 2, this.width + 4, 5);
-
         // Flash when invulnerable
         if (this.invulnerable && Math.floor(gameState.gameTime / 5) % 2 === 0) {
             ctx.globalAlpha = 0.5;
@@ -241,26 +367,33 @@ class Player {
         ctx.fillStyle = '#4CAF50';
         ctx.fillRect(this.x, this.y, this.width, this.height);
 
-        // Head
+        // Face direction indicator
         ctx.fillStyle = '#FFD700';
-        ctx.beginPath();
-        ctx.arc(this.x + this.width / 2, this.y + 10, 8, 0, Math.PI * 2);
-        ctx.fill();
+        const centerX = this.x + this.width / 2;
+        const centerY = this.y + this.height / 2;
+        const indicatorSize = 6;
 
-        // Eyes
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.arc(this.x + this.width / 2 + this.direction * 3, this.y + 9, 2, 0, Math.PI * 2);
-        ctx.fill();
+        switch(this.direction) {
+            case 0: // down
+                ctx.fillRect(centerX - 3, this.y + this.height - 8, 6, 4);
+                break;
+            case 1: // right
+                ctx.fillRect(this.x + this.width - 8, centerY - 3, 4, 6);
+                break;
+            case 2: // up
+                ctx.fillRect(centerX - 3, this.y + 4, 6, 4);
+                break;
+            case 3: // left
+                ctx.fillRect(this.x + 4, centerY - 3, 4, 6);
+                break;
+        }
 
         // Attack indicator
         if (this.isAttacking) {
             ctx.strokeStyle = '#ff0000';
             ctx.lineWidth = 3;
-            const attackX = this.direction === 1 ? this.x + this.width : this.x - this.attackRange;
             ctx.beginPath();
-            ctx.moveTo(this.x + this.width / 2, this.y + this.height / 2);
-            ctx.lineTo(attackX + (this.direction === 1 ? this.attackRange : 0), this.y + this.height / 2);
+            ctx.arc(centerX, centerY, this.attackRange, 0, Math.PI * 2);
             ctx.stroke();
         }
 
@@ -274,14 +407,10 @@ class Enemy {
         this.x = x;
         this.y = y;
         this.width = 30;
-        this.height = 35;
-        this.velocityX = 0;
-        this.velocityY = 0;
-        this.speed = 2;
-        this.direction = -1;
+        this.height = 30;
+        this.speed = 1.5;
         this.type = type;
 
-        // Stats based on type
         if (type === 'basic') {
             this.maxHealth = 30;
             this.health = 30;
@@ -295,82 +424,58 @@ class Enemy {
             this.attack = 15;
             this.defense = 5;
             this.xpReward = 50;
-            this.color = '#ff3333';
+            this.color = '#8b0000';
         }
 
         this.aggroRange = 200;
-        this.attackRange = 40;
+        this.attackRange = 35;
         this.attackCooldown = 0;
-        this.isGrounded = false;
         this.isDead = false;
+        this.moveTimer = 0;
     }
 
     update(player) {
         if (this.isDead) return;
 
-        // AI: Move towards player if in range
-        const distanceToPlayer = Math.abs((this.x + this.width / 2) - (player.x + player.width / 2));
-        const verticalDistance = Math.abs((this.y + this.height / 2) - (player.y + player.height / 2));
+        const dx = (player.x + player.width / 2) - (this.x + this.width / 2);
+        const dy = (player.y + player.height / 2) - (this.y + this.height / 2);
+        const distance = Math.sqrt(dx * dx + dy * dy);
 
-        if (distanceToPlayer < this.aggroRange && verticalDistance < 100) {
+        if (distance < this.aggroRange) {
             // Move towards player
-            if (this.x < player.x) {
-                this.velocityX = this.speed;
-                this.direction = 1;
+            if (distance > this.attackRange) {
+                const angle = Math.atan2(dy, dx);
+                const newX = this.x + Math.cos(angle) * this.speed;
+                const newY = this.y + Math.sin(angle) * this.speed;
+
+                if (!this.checkWallCollision(newX, this.y)) {
+                    this.x = newX;
+                }
+                if (!this.checkWallCollision(this.x, newY)) {
+                    this.y = newY;
+                }
             } else {
-                this.velocityX = -this.speed;
-                this.direction = -1;
-            }
-
-            // Attack if in range
-            if (distanceToPlayer < this.attackRange && verticalDistance < 50) {
+                // Attack
                 this.tryAttack(player);
-                this.velocityX = 0;
-            }
-        } else {
-            // Idle behavior
-            this.velocityX *= FRICTION;
-        }
-
-        // Apply gravity
-        this.velocityY += GRAVITY;
-
-        // Update position
-        this.x += this.velocityX;
-        this.y += this.velocityY;
-
-        // Collision with ground
-        if (this.y + this.height >= CANVAS_HEIGHT) {
-            this.y = CANVAS_HEIGHT - this.height;
-            this.velocityY = 0;
-            this.isGrounded = true;
-        }
-
-        // Collision with platforms
-        for (let platform of gameState.platforms) {
-            if (this.checkPlatformCollision(platform)) {
-                this.isGrounded = true;
             }
         }
 
-        // Keep in bounds
-        if (this.x < 0) this.x = 0;
-        if (this.x + this.width > CANVAS_WIDTH) this.x = CANVAS_WIDTH - this.width;
-
-        // Update cooldowns
         if (this.attackCooldown > 0) this.attackCooldown--;
     }
 
-    checkPlatformCollision(platform) {
-        if (this.velocityY >= 0 &&
-            this.x + this.width > platform.x &&
-            this.x < platform.x + platform.width &&
-            this.y + this.height <= platform.y + 10 &&
-            this.y + this.height + this.velocityY >= platform.y) {
+    checkWallCollision(x, y) {
+        const gridX = Math.floor(x / TILE_SIZE);
+        const gridY = Math.floor(y / TILE_SIZE);
+        const gridX2 = Math.floor((x + this.width) / TILE_SIZE);
+        const gridY2 = Math.floor((y + this.height) / TILE_SIZE);
 
-            this.y = platform.y - this.height;
-            this.velocityY = 0;
-            return true;
+        for (let wall of gameState.walls) {
+            if ((wall.x === gridX && wall.y === gridY) ||
+                (wall.x === gridX2 && wall.y === gridY) ||
+                (wall.x === gridX && wall.y === gridY2) ||
+                (wall.x === gridX2 && wall.y === gridY2)) {
+                return true;
+            }
         }
         return false;
     }
@@ -384,7 +489,6 @@ class Enemy {
 
     takeDamage(damage) {
         this.health -= damage;
-
         if (this.health <= 0) {
             this.health = 0;
             this.die();
@@ -398,7 +502,6 @@ class Enemy {
         createParticles(this.x + this.width / 2, this.y + this.height / 2, this.color, 15);
         updateUI();
 
-        // Remove from enemies array
         const index = gameState.enemies.indexOf(this);
         if (index > -1) {
             gameState.enemies.splice(index, 1);
@@ -408,19 +511,13 @@ class Enemy {
     draw() {
         if (this.isDead) return;
 
-        // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-        ctx.fillRect(this.x - 2, this.y + this.height + 2, this.width + 4, 5);
-
-        // Body
         ctx.fillStyle = this.color;
         ctx.fillRect(this.x, this.y, this.width, this.height);
 
         // Eyes
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.arc(this.x + this.width / 2 + this.direction * 5, this.y + 12, 3, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(this.x + 8, this.y + 10, 5, 5);
+        ctx.fillRect(this.x + 17, this.y + 10, 5, 5);
 
         // Health bar
         const barWidth = this.width;
@@ -428,34 +525,10 @@ class Enemy {
         const healthPercent = this.health / this.maxHealth;
 
         ctx.fillStyle = '#333';
-        ctx.fillRect(this.x, this.y - 10, barWidth, barHeight);
+        ctx.fillRect(this.x, this.y - 8, barWidth, barHeight);
 
         ctx.fillStyle = healthPercent > 0.5 ? '#4CAF50' : healthPercent > 0.25 ? '#FFC107' : '#F44336';
-        ctx.fillRect(this.x, this.y - 10, barWidth * healthPercent, barHeight);
-    }
-}
-
-// Platform Class
-class Platform {
-    constructor(x, y, width, height) {
-        this.x = x;
-        this.y = y;
-        this.width = width;
-        this.height = height;
-    }
-
-    draw() {
-        // Platform shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
-        ctx.fillRect(this.x + 2, this.y + 2, this.width, this.height);
-
-        // Platform
-        ctx.fillStyle = '#8B4513';
-        ctx.fillRect(this.x, this.y, this.width, this.height);
-
-        // Platform highlight
-        ctx.fillStyle = '#A0522D';
-        ctx.fillRect(this.x, this.y, this.width, 5);
+        ctx.fillRect(this.x, this.y - 8, barWidth * healthPercent, barHeight);
     }
 }
 
@@ -465,7 +538,7 @@ class Particle {
         this.x = x;
         this.y = y;
         this.velocityX = (Math.random() - 0.5) * 5;
-        this.velocityY = (Math.random() - 0.5) * 5 - 2;
+        this.velocityY = (Math.random() - 0.5) * 5;
         this.life = 30;
         this.maxLife = 30;
         this.color = color;
@@ -475,7 +548,6 @@ class Particle {
     update() {
         this.x += this.velocityX;
         this.y += this.velocityY;
-        this.velocityY += 0.2;
         this.life--;
     }
 
@@ -519,33 +591,91 @@ function updateUI() {
     document.getElementById('health-text').textContent = `${Math.ceil(player.health)}/${player.maxHealth}`;
 }
 
-function spawnEnemy() {
-    const side = Math.random() > 0.5 ? 1 : 0;
-    const x = side === 1 ? CANVAS_WIDTH - 50 : 50;
-    const y = 100;
+function loadRoom(roomIndex) {
+    gameState.currentRoom = roomIndex;
+    const room = roomTemplates[roomIndex];
 
-    // Spawn stronger enemies as player levels up
-    const type = player.level > 3 && Math.random() > 0.6 ? 'strong' : 'basic';
+    // Clear current entities
+    gameState.walls = [];
+    gameState.doors = [];
+    gameState.chests = [];
+    gameState.enemies = [];
 
-    gameState.enemies.push(new Enemy(x, y, type));
+    // Load walls
+    room.walls.forEach(w => {
+        gameState.walls.push({ x: w.x, y: w.y });
+    });
+
+    // Load doors
+    room.doors.forEach(d => {
+        gameState.doors.push({ x: d.x, y: d.y, toRoom: d.toRoom });
+    });
+
+    // Load chests
+    room.chests.forEach(c => {
+        gameState.chests.push({ x: c.x, y: c.y, opened: c.opened });
+    });
+
+    // Load enemies
+    room.enemies.forEach(e => {
+        gameState.enemies.push(new Enemy(e.x, e.y, e.type));
+    });
+
+    // Position player at door entrance
+    if (roomIndex === 0) {
+        player.x = 3 * TILE_SIZE;
+        player.y = 3 * TILE_SIZE;
+    } else if (roomIndex === 1) {
+        player.x = 10 * TILE_SIZE;
+        player.y = 2 * TILE_SIZE;
+    } else if (roomIndex === 2) {
+        player.x = 2 * TILE_SIZE;
+        player.y = 8 * TILE_SIZE;
+    }
+
+    showMessage(`Entered room ${roomIndex + 1}`);
 }
 
-// Initialize platforms
-function initPlatforms() {
-    gameState.platforms = [
-        new Platform(150, 450, 150, 20),
-        new Platform(450, 400, 150, 20),
-        new Platform(200, 300, 120, 20),
-        new Platform(500, 250, 120, 20),
-        new Platform(300, 500, 200, 20),
-        new Platform(50, 350, 100, 20),
-        new Platform(650, 350, 100, 20)
-    ];
+function drawWalls() {
+    for (let wall of gameState.walls) {
+        ctx.fillStyle = '#34495e';
+        ctx.fillRect(wall.x * TILE_SIZE, wall.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+
+        // Add some texture
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.fillRect(wall.x * TILE_SIZE + 2, wall.y * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+    }
+}
+
+function drawDoors() {
+    for (let door of gameState.doors) {
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(door.x * TILE_SIZE, door.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+
+        ctx.fillStyle = '#FFD700';
+        ctx.fillRect(door.x * TILE_SIZE + 10, door.y * TILE_SIZE + 10, TILE_SIZE - 20, TILE_SIZE - 20);
+    }
+}
+
+function drawChests() {
+    for (let chest of gameState.chests) {
+        if (chest.opened) {
+            ctx.fillStyle = '#666';
+        } else {
+            ctx.fillStyle = '#8B4513';
+        }
+        ctx.fillRect(chest.x * TILE_SIZE + 5, chest.y * TILE_SIZE + 5, TILE_SIZE - 10, TILE_SIZE - 10);
+
+        if (!chest.opened) {
+            ctx.fillStyle = '#FFD700';
+            ctx.fillRect(chest.x * TILE_SIZE + 15, chest.y * TILE_SIZE + 15, 10, 5);
+        }
+    }
 }
 
 // Initialize game
-const player = new Player(100, 100);
-initPlatforms();
+const player = new Player(3 * TILE_SIZE, 3 * TILE_SIZE);
+loadRoom(0);
 
 // Keyboard input
 window.addEventListener('keydown', (e) => {
@@ -556,19 +686,69 @@ window.addEventListener('keyup', (e) => {
     gameState.keys[e.key] = false;
 });
 
+// Button controls
+function setupButtonControls() {
+    const buttons = {
+        'btn-up': 'ArrowUp',
+        'btn-down': 'ArrowDown',
+        'btn-left': 'ArrowLeft',
+        'btn-right': 'ArrowRight',
+        'btn-attack': ' '
+    };
+
+    for (let [btnId, key] of Object.entries(buttons)) {
+        const btn = document.getElementById(btnId);
+
+        btn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            gameState.keys[key] = true;
+        });
+
+        btn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            gameState.keys[key] = false;
+        });
+
+        btn.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            gameState.keys[key] = true;
+        });
+
+        btn.addEventListener('mouseup', (e) => {
+            e.preventDefault();
+            gameState.keys[key] = false;
+        });
+
+        btn.addEventListener('mouseleave', (e) => {
+            gameState.keys[key] = false;
+        });
+    }
+}
+
+setupButtonControls();
+
 // Game Loop
 function gameLoop() {
-    // Clear canvas
-    ctx.fillStyle = '#87CEEB';
+    // Clear canvas with dungeon floor
+    ctx.fillStyle = '#2c2c2c';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Update game time
+    // Draw floor tiles
+    ctx.fillStyle = '#3a3a3a';
+    for (let x = 0; x < GRID_WIDTH; x++) {
+        for (let y = 0; y < GRID_HEIGHT; y++) {
+            if ((x + y) % 2 === 0) {
+                ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            }
+        }
+    }
+
     gameState.gameTime++;
 
-    // Update and draw platforms
-    for (let platform of gameState.platforms) {
-        platform.draw();
-    }
+    // Draw dungeon elements
+    drawWalls();
+    drawDoors();
+    drawChests();
 
     // Update and draw player
     player.update();
@@ -591,11 +771,6 @@ function gameLoop() {
         }
     }
 
-    // Spawn enemies periodically
-    if (gameState.gameTime % 180 === 0 && gameState.enemies.length < 5) {
-        spawnEnemy();
-    }
-
     // Update message timer
     if (gameState.messageTimer > 0) {
         gameState.messageTimer--;
@@ -609,6 +784,5 @@ function gameLoop() {
 
 // Start game
 updateUI();
-showMessage('Welcome! Defeat enemies to level up!');
-setTimeout(() => spawnEnemy(), 2000);
+showMessage('Welcome to the dungeon! Explore and defeat enemies!');
 gameLoop();
