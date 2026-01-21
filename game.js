@@ -32,16 +32,16 @@ const gameState = {
 const roomTemplates = [
     {
         walls: [
-            // Border walls
-            ...Array.from({ length: GRID_WIDTH }, (_, i) => ({ x: i, y: 0 })),
-            ...Array.from({ length: GRID_WIDTH }, (_, i) => ({ x: i, y: GRID_HEIGHT - 1 })),
-            ...Array.from({ length: GRID_HEIGHT }, (_, i) => ({ x: 0, y: i })),
+            // Border walls (with gaps for doors)
+            ...Array.from({ length: GRID_WIDTH }, (_, i) => i !== 10 ? { x: i, y: 0 } : null).filter(Boolean),
+            ...Array.from({ length: GRID_WIDTH }, (_, i) => i !== 10 ? { x: i, y: GRID_HEIGHT - 1 } : null).filter(Boolean),
+            ...Array.from({ length: GRID_HEIGHT }, (_, i) => { x: 0, y: i }),
             ...Array.from({ length: GRID_HEIGHT }, (_, i) => ({ x: GRID_WIDTH - 1, y: i })),
             // Interior walls
             { x: 5, y: 5 }, { x: 6, y: 5 }, { x: 7, y: 5 },
             { x: 14, y: 10 }, { x: 14, y: 11 }, { x: 14, y: 12 }
         ],
-        doors: [{ x: 10, y: GRID_HEIGHT - 1, toRoom: 1 }],
+        doors: [{ x: 10, y: GRID_HEIGHT - 2, toRoom: 1 }],
         chests: [{ x: 3, y: 3, opened: false }],
         enemies: [
             { x: 12 * TILE_SIZE, y: 8 * TILE_SIZE, type: 'basic' },
@@ -50,15 +50,15 @@ const roomTemplates = [
     },
     {
         walls: [
-            ...Array.from({ length: GRID_WIDTH }, (_, i) => ({ x: i, y: 0 })),
+            ...Array.from({ length: GRID_WIDTH }, (_, i) => i !== 10 ? { x: i, y: 0 } : null).filter(Boolean),
             ...Array.from({ length: GRID_WIDTH }, (_, i) => ({ x: i, y: GRID_HEIGHT - 1 })),
             ...Array.from({ length: GRID_HEIGHT }, (_, i) => ({ x: 0, y: i })),
-            ...Array.from({ length: GRID_HEIGHT }, (_, i) => ({ x: GRID_WIDTH - 1, y: i })),
+            ...Array.from({ length: GRID_HEIGHT }, (_, i) => i !== 8 ? { x: GRID_WIDTH - 1, y: i } : null).filter(Boolean),
             { x: 8, y: 7 }, { x: 9, y: 7 }, { x: 10, y: 7 }, { x: 11, y: 7 }, { x: 12, y: 7 }
         ],
         doors: [
-            { x: 10, y: 0, toRoom: 0 },
-            { x: GRID_WIDTH - 1, y: 8, toRoom: 2 }
+            { x: 10, y: 1, toRoom: 0 },
+            { x: GRID_WIDTH - 2, y: 8, toRoom: 2 }
         ],
         chests: [{ x: 15, y: 3, opened: false }],
         enemies: [
@@ -71,12 +71,12 @@ const roomTemplates = [
         walls: [
             ...Array.from({ length: GRID_WIDTH }, (_, i) => ({ x: i, y: 0 })),
             ...Array.from({ length: GRID_WIDTH }, (_, i) => ({ x: i, y: GRID_HEIGHT - 1 })),
-            ...Array.from({ length: GRID_HEIGHT }, (_, i) => ({ x: 0, y: i })),
+            ...Array.from({ length: GRID_HEIGHT }, (_, i) => i !== 8 ? { x: 0, y: i } : null).filter(Boolean),
             ...Array.from({ length: GRID_HEIGHT }, (_, i) => ({ x: GRID_WIDTH - 1, y: i })),
             { x: 5, y: 5 }, { x: 6, y: 5 }, { x: 5, y: 6 },
             { x: 14, y: 8 }, { x: 15, y: 8 }, { x: 14, y: 9 }
         ],
-        doors: [{ x: 0, y: 8, toRoom: 1 }],
+        doors: [{ x: 1, y: 8, toRoom: 1 }],
         chests: [
             { x: 10, y: 7, opened: false },
             { x: 17, y: 3, opened: false }
@@ -579,16 +579,28 @@ function showMessage(text) {
 }
 
 function updateUI() {
+    // Update quick HUD
+    document.getElementById('quick-level').textContent = player.level;
+    document.getElementById('quick-health-text').textContent = `${Math.ceil(player.health)}/${player.maxHealth}`;
+
+    const quickHealthPercent = (player.health / player.maxHealth) * 100;
+    document.getElementById('quick-health-bar').style.width = quickHealthPercent + '%';
+
+    // Update character menu
     document.getElementById('player-level').textContent = player.level;
     document.getElementById('player-xp').textContent = player.xp;
     document.getElementById('player-xp-needed').textContent = player.xpNeeded;
     document.getElementById('player-attack').textContent = player.attack;
     document.getElementById('player-defense').textContent = player.defense;
     document.getElementById('enemies-defeated').textContent = gameState.enemiesDefeated;
+    document.getElementById('current-room').textContent = gameState.currentRoom + 1;
 
     const healthPercent = (player.health / player.maxHealth) * 100;
     document.getElementById('health-bar').style.width = healthPercent + '%';
     document.getElementById('health-text').textContent = `${Math.ceil(player.health)}/${player.maxHealth}`;
+
+    const xpPercent = (player.xp / player.xpNeeded) * 100;
+    document.getElementById('xp-bar').style.width = xpPercent + '%';
 }
 
 function loadRoom(roomIndex) {
@@ -726,6 +738,43 @@ function setupButtonControls() {
 }
 
 setupButtonControls();
+
+// Character Menu Toggle
+function setupCharacterMenu() {
+    const charMenu = document.getElementById('char-menu');
+    const charMenuBtn = document.getElementById('char-menu-btn');
+    const charMenuClose = document.getElementById('char-menu-close');
+
+    function openMenu() {
+        charMenu.classList.remove('hidden');
+        updateUI(); // Refresh stats when opening
+    }
+
+    function closeMenu() {
+        charMenu.classList.add('hidden');
+    }
+
+    charMenuBtn.addEventListener('click', openMenu);
+    charMenuBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        openMenu();
+    });
+
+    charMenuClose.addEventListener('click', closeMenu);
+    charMenuClose.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        closeMenu();
+    });
+
+    // Close when clicking outside
+    charMenu.addEventListener('click', (e) => {
+        if (e.target === charMenu) {
+            closeMenu();
+        }
+    });
+}
+
+setupCharacterMenu();
 
 // Game Loop
 function gameLoop() {
