@@ -35,7 +35,7 @@ const roomTemplates = [
             // Border walls (with gaps for doors)
             ...Array.from({ length: GRID_WIDTH }, (_, i) => i !== 10 ? { x: i, y: 0 } : null).filter(Boolean),
             ...Array.from({ length: GRID_WIDTH }, (_, i) => i !== 10 ? { x: i, y: GRID_HEIGHT - 1 } : null).filter(Boolean),
-            ...Array.from({ length: GRID_HEIGHT }, (_, i) => { x: 0, y: i }),
+            ...Array.from({ length: GRID_HEIGHT }, (_, i) => ({ x: 0, y: i })),
             ...Array.from({ length: GRID_HEIGHT }, (_, i) => ({ x: GRID_WIDTH - 1, y: i })),
             // Interior walls
             { x: 5, y: 5 }, { x: 6, y: 5 }, { x: 7, y: 5 },
@@ -698,46 +698,145 @@ window.addEventListener('keyup', (e) => {
     gameState.keys[e.key] = false;
 });
 
-// Button controls
-function setupButtonControls() {
-    const buttons = {
-        'btn-up': 'ArrowUp',
-        'btn-down': 'ArrowDown',
-        'btn-left': 'ArrowLeft',
-        'btn-right': 'ArrowRight',
-        'btn-attack': ' '
-    };
+// Virtual Joystick Controls
+function setupVirtualJoystick() {
+    const joystickBase = document.getElementById('joystick-base');
+    const joystickStick = document.getElementById('joystick-stick');
+    const attackBtn = document.getElementById('btn-attack');
 
-    for (let [btnId, key] of Object.entries(buttons)) {
-        const btn = document.getElementById(btnId);
+    let joystickActive = false;
+    let joystickCenterX = 0;
+    let joystickCenterY = 0;
+    const maxDistance = 35; // Maximum distance stick can move from center
 
-        btn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            gameState.keys[key] = true;
-        });
-
-        btn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            gameState.keys[key] = false;
-        });
-
-        btn.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            gameState.keys[key] = true;
-        });
-
-        btn.addEventListener('mouseup', (e) => {
-            e.preventDefault();
-            gameState.keys[key] = false;
-        });
-
-        btn.addEventListener('mouseleave', (e) => {
-            gameState.keys[key] = false;
-        });
+    function getJoystickCenter() {
+        const rect = joystickBase.getBoundingClientRect();
+        joystickCenterX = rect.left + rect.width / 2;
+        joystickCenterY = rect.top + rect.height / 2;
     }
+
+    function handleJoystickStart(e) {
+        e.preventDefault();
+        joystickActive = true;
+        getJoystickCenter();
+        handleJoystickMove(e);
+    }
+
+    function handleJoystickMove(e) {
+        if (!joystickActive) return;
+
+        e.preventDefault();
+
+        // Get touch/mouse position
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+        // Calculate offset from center
+        let deltaX = clientX - joystickCenterX;
+        let deltaY = clientY - joystickCenterY;
+
+        // Calculate distance and angle
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+        // Limit stick movement
+        if (distance > maxDistance) {
+            const angle = Math.atan2(deltaY, deltaX);
+            deltaX = Math.cos(angle) * maxDistance;
+            deltaY = Math.sin(angle) * maxDistance;
+        }
+
+        // Move the stick visually
+        joystickStick.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+
+        // Convert to directional input
+        const threshold = 15; // Minimum distance to register direction
+
+        // Reset all directions
+        gameState.keys['ArrowUp'] = false;
+        gameState.keys['ArrowDown'] = false;
+        gameState.keys['ArrowLeft'] = false;
+        gameState.keys['ArrowRight'] = false;
+        gameState.keys['w'] = false;
+        gameState.keys['s'] = false;
+        gameState.keys['a'] = false;
+        gameState.keys['d'] = false;
+
+        if (distance > threshold) {
+            // Set directions based on angle
+            const angle = Math.atan2(deltaY, deltaX);
+            const degrees = angle * (180 / Math.PI);
+
+            // Vertical
+            if (deltaY < -threshold) {
+                gameState.keys['ArrowUp'] = true;
+                gameState.keys['w'] = true;
+            } else if (deltaY > threshold) {
+                gameState.keys['ArrowDown'] = true;
+                gameState.keys['s'] = true;
+            }
+
+            // Horizontal
+            if (deltaX < -threshold) {
+                gameState.keys['ArrowLeft'] = true;
+                gameState.keys['a'] = true;
+            } else if (deltaX > threshold) {
+                gameState.keys['ArrowRight'] = true;
+                gameState.keys['d'] = true;
+            }
+        }
+    }
+
+    function handleJoystickEnd(e) {
+        e.preventDefault();
+        joystickActive = false;
+
+        // Reset stick position
+        joystickStick.style.transform = 'translate(-50%, -50%)';
+
+        // Clear all directional keys
+        gameState.keys['ArrowUp'] = false;
+        gameState.keys['ArrowDown'] = false;
+        gameState.keys['ArrowLeft'] = false;
+        gameState.keys['ArrowRight'] = false;
+        gameState.keys['w'] = false;
+        gameState.keys['s'] = false;
+        gameState.keys['a'] = false;
+        gameState.keys['d'] = false;
+    }
+
+    // Joystick touch events
+    joystickBase.addEventListener('touchstart', handleJoystickStart);
+    joystickBase.addEventListener('touchmove', handleJoystickMove);
+    joystickBase.addEventListener('touchend', handleJoystickEnd);
+
+    // Joystick mouse events (for desktop testing)
+    joystickBase.addEventListener('mousedown', handleJoystickStart);
+    window.addEventListener('mousemove', handleJoystickMove);
+    window.addEventListener('mouseup', handleJoystickEnd);
+
+    // Attack button
+    attackBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        gameState.keys[' '] = true;
+    });
+
+    attackBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        gameState.keys[' '] = false;
+    });
+
+    attackBtn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        gameState.keys[' '] = true;
+    });
+
+    attackBtn.addEventListener('mouseup', (e) => {
+        e.preventDefault();
+        gameState.keys[' '] = false;
+    });
 }
 
-setupButtonControls();
+setupVirtualJoystick();
 
 // Character Menu Toggle
 function setupCharacterMenu() {

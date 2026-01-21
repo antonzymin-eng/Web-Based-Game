@@ -34,19 +34,16 @@
         <div class="canvas-wrapper">
             <canvas id="gameCanvas"></canvas>
 
-            <!-- Overlay Controls -->
-            <div class="game-controls">
-                <div class="control-row">
-                    <button id="btn-up" class="control-btn">↑</button>
+            <!-- Virtual Joystick - Bottom Left -->
+            <div class="joystick-container">
+                <div id="joystick-base" class="joystick-base">
+                    <div id="joystick-stick" class="joystick-stick"></div>
                 </div>
-                <div class="control-row">
-                    <button id="btn-left" class="control-btn">←</button>
-                    <button id="btn-down" class="control-btn">↓</button>
-                    <button id="btn-right" class="control-btn">→</button>
-                </div>
-                <div class="attack-row">
-                    <button id="btn-attack" class="control-btn attack-btn">⚔️</button>
-                </div>
+            </div>
+
+            <!-- Attack Button - Bottom Right -->
+            <div class="action-controls">
+                <button id="btn-attack" class="action-btn attack-btn">⚔️</button>
             </div>
         </div>
 
