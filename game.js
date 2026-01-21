@@ -7,7 +7,17 @@ const GRID_HEIGHT = CANVAS_HEIGHT / TILE_SIZE;
 
 // Get canvas and context
 const canvas = document.getElementById('gameCanvas');
+if (!canvas) {
+    console.error('Canvas element not found!');
+    throw new Error('Canvas element not found');
+}
+
 const ctx = canvas.getContext('2d');
+if (!ctx) {
+    console.error('Could not get 2D context!');
+    throw new Error('Could not get 2D context');
+}
+
 canvas.width = CANVAS_WIDTH;
 canvas.height = CANVAS_HEIGHT;
 
@@ -704,6 +714,11 @@ function setupVirtualJoystick() {
     const joystickStick = document.getElementById('joystick-stick');
     const attackBtn = document.getElementById('btn-attack');
 
+    if (!joystickBase || !joystickStick || !attackBtn) {
+        console.error('Joystick or attack button elements not found!');
+        return;
+    }
+
     let joystickActive = false;
     let joystickCenterX = 0;
     let joystickCenterY = 0;
@@ -836,13 +851,16 @@ function setupVirtualJoystick() {
     });
 }
 
-setupVirtualJoystick();
-
 // Character Menu Toggle
 function setupCharacterMenu() {
     const charMenu = document.getElementById('char-menu');
     const charMenuBtn = document.getElementById('char-menu-btn');
     const charMenuClose = document.getElementById('char-menu-close');
+
+    if (!charMenu || !charMenuBtn || !charMenuClose) {
+        console.error('Character menu elements not found!');
+        return;
+    }
 
     function openMenu() {
         charMenu.classList.remove('hidden');
@@ -873,7 +891,21 @@ function setupCharacterMenu() {
     });
 }
 
-setupCharacterMenu();
+// Initialize game
+function initGame() {
+    setupVirtualJoystick();
+    setupCharacterMenu();
+    updateUI();
+    showMessage('Welcome to the dungeon! Explore and defeat enemies!');
+    gameLoop();
+}
+
+// Start game when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initGame);
+} else {
+    initGame();
+}
 
 // Game Loop
 function gameLoop() {
@@ -929,8 +961,3 @@ function gameLoop() {
 
     requestAnimationFrame(gameLoop);
 }
-
-// Start game
-updateUI();
-showMessage('Welcome to the dungeon! Explore and defeat enemies!');
-gameLoop();
