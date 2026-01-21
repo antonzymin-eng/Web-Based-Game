@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platformer RPG - Adventure Awaits!</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="game-header">
+            <h1>🎮 Platformer RPG</h1>
+            <div class="instructions">
+                <p>
+                    <strong>Controls:</strong>
+                    Arrow Keys or WASD to Move |
+                    SPACE to Jump |
+                    F to Attack
+                </p>
+            </div>
+        </div>
+
+        <div class="game-stats">
+            <div class="stat-group">
+                <div class="stat">
+                    <span class="stat-label">Level:</span>
+                    <span id="player-level">1</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">XP:</span>
+                    <span id="player-xp">0</span>
+                    <span>/</span>
+                    <span id="player-xp-needed">100</span>
+                </div>
+            </div>
+
+            <div class="stat-group">
+                <div class="stat">
+                    <span class="stat-label">HP:</span>
+                    <div class="bar-container">
+                        <div class="bar health-bar" id="health-bar"></div>
+                        <span class="bar-text" id="health-text">100/100</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-group">
+                <div class="stat">
+                    <span class="stat-label">Attack:</span>
+                    <span id="player-attack">10</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Defense:</span>
+                    <span id="player-defense">5</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Enemies:</span>
+                    <span id="enemies-defeated">0</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="canvas-wrapper">
+            <canvas id="gameCanvas"></canvas>
+        </div>
+
+        <div class="game-messages">
+            <div id="message-display"></div>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
