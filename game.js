@@ -62,7 +62,8 @@ const viewport = {
     lastTapTime: 0,    // For double-tap detection
     waitingForDoubleTap: false, // Prevents drag during double-tap window
     followPlayer: true, // Should camera follow player
-    lastScale: 1       // Track last scale for zoom indicator optimization
+    lastScale: 1,      // Track last scale for zoom indicator optimization
+    lastFollowPlayer: true // Track last followPlayer state for indicator updates
 };
 
 // Room Templates
@@ -641,23 +642,35 @@ function updateUI() {
 }
 
 function updateZoomIndicator() {
-    // Only update if scale actually changed
-    if (Math.abs(viewport.scale - viewport.lastScale) < 0.001) {
+    // Check if anything changed
+    const scaleChanged = Math.abs(viewport.scale - viewport.lastScale) > 0.001;
+    const followChanged = viewport.followPlayer !== viewport.lastFollowPlayer;
+
+    // Only update if something actually changed
+    if (!scaleChanged && !followChanged) {
         return;
     }
 
-    viewport.lastScale = viewport.scale;
-    const zoomPercent = Math.round(viewport.scale * 100);
+    // Update tracked values
+    if (scaleChanged) {
+        viewport.lastScale = viewport.scale;
+    }
+    if (followChanged) {
+        viewport.lastFollowPlayer = viewport.followPlayer;
+    }
+
     const zoomLevelElement = document.getElementById('zoom-level');
     const zoomIndicatorElement = document.getElementById('zoom-indicator');
 
-    if (zoomLevelElement) {
+    // Update zoom percentage if scale changed
+    if (scaleChanged && zoomLevelElement) {
+        const zoomPercent = Math.round(viewport.scale * 100);
         zoomLevelElement.textContent = zoomPercent;
     }
 
-    // Fade out indicator if at default zoom
-    // Change color based on camera mode
+    // Update visual styling
     if (zoomIndicatorElement) {
+        // Fade out indicator if at default zoom
         if (Math.abs(viewport.scale - VIEWPORT_DEFAULT_ZOOM) < 0.01) {
             zoomIndicatorElement.style.opacity = '0.3';
         } else {
@@ -987,27 +1000,31 @@ function clampPanOffset() {
     const scaledHeight = CANVAS_HEIGHT * viewport.scale;
 
     if (viewport.scale > 1) {
-        // Zoomed in: The game world is larger than the viewport
-        // Allow panning, but keep edges within view
+        // Zoomed in: World is larger than viewport
+        // Clamp to keep edges within view (standard panning bounds)
         const minOffsetX = -(scaledWidth - CANVAS_WIDTH);
         const minOffsetY = -(scaledHeight - CANVAS_HEIGHT);
 
         viewport.offsetX = Math.max(minOffsetX, Math.min(0, viewport.offsetX));
         viewport.offsetY = Math.max(minOffsetY, Math.min(0, viewport.offsetY));
-    } else if (viewport.scale < 1) {
-        // Zoomed out: The game world is smaller than the viewport
-        // When following player, center on player; otherwise center world
-        if (!viewport.followPlayer) {
-            viewport.offsetX = (CANVAS_WIDTH - scaledWidth) / 2;
-            viewport.offsetY = (CANVAS_HEIGHT - scaledHeight) / 2;
-        }
-        // If following player, the offset is already set by updateCameraFollow
     } else {
-        // At 1x zoom: Center on player if following, otherwise no offset
-        if (!viewport.followPlayer) {
-            viewport.offsetX = 0;
-            viewport.offsetY = 0;
-        }
+        // At 1x or zoomed out: World is smaller than or equal to viewport
+        // Allow panning but keep at least some of the world visible
+        // This allows both camera-follow and manual panning to work
+        const margin = 0.25; // Keep at least 25% of world visible
+        const minVisible = margin * scaledWidth;
+        const minVisibleY = margin * scaledHeight;
+
+        // Max offset: world's left/top edge can be this far to the right/bottom
+        const maxOffsetX = CANVAS_WIDTH - minVisible;
+        const maxOffsetY = CANVAS_HEIGHT - minVisibleY;
+
+        // Min offset: world's right/bottom edge must be at least this far from left/top
+        const minOffsetX = minVisible - scaledWidth;
+        const minOffsetY = minVisibleY - scaledHeight;
+
+        viewport.offsetX = Math.max(minOffsetX, Math.min(maxOffsetX, viewport.offsetX));
+        viewport.offsetY = Math.max(minOffsetY, Math.min(maxOffsetY, viewport.offsetY));
     }
 }
 
