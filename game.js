@@ -851,8 +851,6 @@ function setupVirtualJoystick() {
     });
 }
 
-setupVirtualJoystick();
-
 // Character Menu Toggle
 function setupCharacterMenu() {
     const charMenu = document.getElementById('char-menu');
@@ -893,7 +891,21 @@ function setupCharacterMenu() {
     });
 }
 
-setupCharacterMenu();
+// Initialize game
+function initGame() {
+    setupVirtualJoystick();
+    setupCharacterMenu();
+    updateUI();
+    showMessage('Welcome to the dungeon! Explore and defeat enemies!');
+    gameLoop();
+}
+
+// Start game when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initGame);
+} else {
+    initGame();
+}
 
 // Game Loop
 function gameLoop() {
@@ -949,8 +961,3 @@ function gameLoop() {
 
     requestAnimationFrame(gameLoop);
 }
-
-// Start game
-updateUI();
-showMessage('Welcome to the dungeon! Explore and defeat enemies!');
-gameLoop();
