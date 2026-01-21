@@ -45,6 +45,7 @@ const VIEWPORT_DEFAULT_ZOOM = 1.0;
 const PINCH_ZOOM_SENSITIVITY = 0.01;
 const WHEEL_ZOOM_STEP = 0.1;
 const DOUBLE_TAP_DELAY = 300; // ms
+const CAMERA_SMOOTHING = 0.15; // Lerp factor for smooth camera (0 = no smoothing, 1 = instant)
 
 // Viewport State for zoom and pan
 const viewport = {
@@ -61,8 +62,7 @@ const viewport = {
     lastTapTime: 0,    // For double-tap detection
     waitingForDoubleTap: false, // Prevents drag during double-tap window
     followPlayer: true, // Should camera follow player
-    manualPanOffsetX: 0, // Additional offset from manual panning
-    manualPanOffsetY: 0  // Additional offset from manual panning
+    lastScale: 1       // Track last scale for zoom indicator optimization
 };
 
 // Room Templates
@@ -641,6 +641,12 @@ function updateUI() {
 }
 
 function updateZoomIndicator() {
+    // Only update if scale actually changed
+    if (Math.abs(viewport.scale - viewport.lastScale) < 0.001) {
+        return;
+    }
+
+    viewport.lastScale = viewport.scale;
     const zoomPercent = Math.round(viewport.scale * 100);
     const zoomLevelElement = document.getElementById('zoom-level');
     const zoomIndicatorElement = document.getElementById('zoom-indicator');
@@ -650,11 +656,21 @@ function updateZoomIndicator() {
     }
 
     // Fade out indicator if at default zoom
+    // Change color based on camera mode
     if (zoomIndicatorElement) {
         if (Math.abs(viewport.scale - VIEWPORT_DEFAULT_ZOOM) < 0.01) {
             zoomIndicatorElement.style.opacity = '0.3';
         } else {
             zoomIndicatorElement.style.opacity = '1';
+        }
+
+        // Change border color to indicate manual camera mode
+        if (viewport.followPlayer) {
+            zoomIndicatorElement.style.borderColor = '#4CAF50'; // Green = following
+            zoomIndicatorElement.style.color = '#4CAF50';
+        } else {
+            zoomIndicatorElement.style.borderColor = '#FFA500'; // Orange = manual
+            zoomIndicatorElement.style.color = '#FFA500';
         }
     }
 }
@@ -939,7 +955,12 @@ function setupCharacterMenu() {
 
 // Camera Follow System
 function updateCameraFollow() {
-    if (!viewport.followPlayer) return;
+    // Only update camera position when following player
+    if (!viewport.followPlayer) {
+        // In manual mode, just clamp the current offset
+        clampPanOffset();
+        return;
+    }
 
     // Calculate player center position in world coordinates
     const playerCenterX = player.x + player.width / 2;
@@ -952,9 +973,9 @@ function updateCameraFollow() {
     const targetOffsetX = CANVAS_WIDTH / 2 - playerCenterX * viewport.scale;
     const targetOffsetY = CANVAS_HEIGHT / 2 - playerCenterY * viewport.scale;
 
-    // Apply manual pan offset
-    viewport.offsetX = targetOffsetX + viewport.manualPanOffsetX;
-    viewport.offsetY = targetOffsetY + viewport.manualPanOffsetY;
+    // Apply smooth camera movement with lerp
+    viewport.offsetX += (targetOffsetX - viewport.offsetX) * CAMERA_SMOOTHING;
+    viewport.offsetY += (targetOffsetY - viewport.offsetY) * CAMERA_SMOOTHING;
 
     // Clamp to keep world visible
     clampPanOffset();
@@ -1061,8 +1082,6 @@ function setupViewportControls() {
             if (isDoubleTap && viewport.waitingForDoubleTap) {
                 // Double tap detected - reset zoom and re-enable player follow
                 viewport.scale = VIEWPORT_DEFAULT_ZOOM;
-                viewport.manualPanOffsetX = 0;
-                viewport.manualPanOffsetY = 0;
                 viewport.followPlayer = true;
                 viewport.lastTapTime = 0;
                 viewport.isDragging = false;
@@ -1076,10 +1095,11 @@ function setupViewportControls() {
             viewport.waitingForDoubleTap = true;
 
             // One finger - prepare for pan
+            // Save current offset as drag start point
             viewport.isDragging = true;
             viewport.isZooming = false;
-            viewport.dragStartX = touchesOnCanvas[0].clientX - viewport.manualPanOffsetX;
-            viewport.dragStartY = touchesOnCanvas[0].clientY - viewport.manualPanOffsetY;
+            viewport.dragStartX = touchesOnCanvas[0].clientX - viewport.offsetX;
+            viewport.dragStartY = touchesOnCanvas[0].clientY - viewport.offsetY;
 
             // Clear waiting flag after delay
             setTimeout(() => {
@@ -1114,19 +1134,21 @@ function setupViewportControls() {
             const canvasX = center.x - rect.left;
             const canvasY = center.y - rect.top;
 
-            // Adjust manual offset to zoom towards pinch center
+            // Adjust offset to zoom towards pinch center
             const scaleFactor = viewport.scale / oldScale;
-            viewport.manualPanOffsetX = canvasX - (canvasX - viewport.manualPanOffsetX) * scaleFactor;
-            viewport.manualPanOffsetY = canvasY - (canvasY - viewport.manualPanOffsetY) * scaleFactor;
+            viewport.offsetX = canvasX - (canvasX - viewport.offsetX) * scaleFactor;
+            viewport.offsetY = canvasY - (canvasY - viewport.offsetY) * scaleFactor;
 
             viewport.lastTouchDistance = currentDistance;
-            updateCameraFollow();
+            clampPanOffset();
         } else if (viewport.isDragging && touchesOnCanvas.length === 1) {
             // Pan the viewport manually (disables player follow)
             viewport.followPlayer = false;
-            viewport.manualPanOffsetX = touchesOnCanvas[0].clientX - viewport.dragStartX;
-            viewport.manualPanOffsetY = touchesOnCanvas[0].clientY - viewport.dragStartY;
-            updateCameraFollow(); // This will apply manual offset
+
+            // Update offset directly based on drag
+            viewport.offsetX = touchesOnCanvas[0].clientX - viewport.dragStartX;
+            viewport.offsetY = touchesOnCanvas[0].clientY - viewport.dragStartY;
+            clampPanOffset();
         }
     }
 
@@ -1143,8 +1165,8 @@ function setupViewportControls() {
         } else if (touchesOnCanvas.length === 1 && !viewport.isZooming) {
             // Continue dragging with remaining finger
             viewport.isDragging = true;
-            viewport.dragStartX = touchesOnCanvas[0].clientX - viewport.manualPanOffsetX;
-            viewport.dragStartY = touchesOnCanvas[0].clientY - viewport.manualPanOffsetY;
+            viewport.dragStartX = touchesOnCanvas[0].clientX - viewport.offsetX;
+            viewport.dragStartY = touchesOnCanvas[0].clientY - viewport.offsetY;
         }
     }
 
@@ -1167,10 +1189,10 @@ function setupViewportControls() {
         const canvasY = e.clientY - rect.top;
 
         const scaleFactor = viewport.scale / oldScale;
-        viewport.manualPanOffsetX = canvasX - (canvasX - viewport.manualPanOffsetX) * scaleFactor;
-        viewport.manualPanOffsetY = canvasY - (canvasY - viewport.manualPanOffsetY) * scaleFactor;
+        viewport.offsetX = canvasX - (canvasX - viewport.offsetX) * scaleFactor;
+        viewport.offsetY = canvasY - (canvasY - viewport.offsetY) * scaleFactor;
 
-        updateCameraFollow();
+        clampPanOffset();
     }
 
     // Attach event listeners to canvas wrapper
