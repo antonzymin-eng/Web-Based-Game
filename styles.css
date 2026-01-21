@@ -6,7 +6,7 @@
 
 body {
     font-family: 'Arial', sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
     min-height: 100vh;
     display: flex;
     justify-content: center;
@@ -122,9 +122,9 @@ body {
 }
 
 #gameCanvas {
-    border: 3px solid #667eea;
+    border: 3px solid #34495e;
     border-radius: 10px;
-    background: #87ceeb;
+    background: #1a1a1a;
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
     max-width: 100%;
     height: auto;
@@ -145,6 +145,59 @@ body {
     font-size: 1.1em;
 }
 
+/* Game Controls */
+.game-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: 20px;
+    padding: 20px;
+    background: #f8f8f8;
+    border-radius: 10px;
+}
+
+.control-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.control-btn {
+    width: 70px;
+    height: 70px;
+    font-size: 2em;
+    border: 3px solid #34495e;
+    border-radius: 12px;
+    background: linear-gradient(145deg, #ffffff, #e0e0e0);
+    box-shadow:
+        0 4px 6px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    transition: all 0.1s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.control-btn:active {
+    transform: translateY(2px);
+    box-shadow:
+        0 2px 3px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    background: linear-gradient(145deg, #e0e0e0, #ffffff);
+}
+
+.attack-btn {
+    background: linear-gradient(145deg, #ff6b6b, #ee5a6f);
+    color: white;
+    font-size: 1.8em;
+    border-color: #c0392b;
+}
+
+.attack-btn:active {
+    background: linear-gradient(145deg, #ee5a6f, #ff6b6b);
+}
+
 @media (max-width: 768px) {
     .game-header h1 {
         font-size: 1.8em;
@@ -152,6 +205,7 @@ body {
 
     .instructions p {
         font-size: 0.8em;
+        margin: 5px 0;
     }
 
     .game-stats {
@@ -160,5 +214,11 @@ body {
 
     .stat-group {
         justify-content: center;
+    }
+
+    .control-btn {
+        width: 80px;
+        height: 80px;
+        font-size: 2.2em;
     }
 }

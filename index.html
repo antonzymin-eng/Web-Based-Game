@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Platformer RPG - Adventure Awaits!</title>
+    <title>Dungeon Crawler RPG - Adventure Awaits!</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="game-container">
         <div class="game-header">
-            <h1>🎮 Platformer RPG</h1>
+            <h1>🏰 Dungeon Crawler RPG</h1>
             <div class="instructions">
                 <p>
-                    <strong>Controls:</strong>
-                    Arrow Keys or WASD to Move |
-                    SPACE to Jump |
-                    F to Attack
+                    <strong>Keyboard:</strong> Arrow Keys or WASD to Move | SPACE to Attack
+                </p>
+                <p>
+                    <strong>Mobile:</strong> Use the buttons below!
                 </p>
             </div>
         </div>
@@ -66,6 +66,20 @@
 
         <div class="game-messages">
             <div id="message-display"></div>
+        </div>
+
+        <div class="game-controls">
+            <div class="control-row">
+                <button id="btn-up" class="control-btn">↑</button>
+            </div>
+            <div class="control-row">
+                <button id="btn-left" class="control-btn">←</button>
+                <button id="btn-attack" class="control-btn attack-btn">⚔️</button>
+                <button id="btn-right" class="control-btn">→</button>
+            </div>
+            <div class="control-row">
+                <button id="btn-down" class="control-btn">↓</button>
+            </div>
         </div>
     </div>
 
