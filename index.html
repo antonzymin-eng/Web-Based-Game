@@ -2,83 +2,115 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Dungeon Crawler RPG - Adventure Awaits!</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="game-container">
-        <div class="game-header">
-            <h1>🏰 Dungeon Crawler RPG</h1>
-            <div class="instructions">
-                <p>
-                    <strong>Keyboard:</strong> Arrow Keys or WASD to Move | SPACE to Attack
-                </p>
-                <p>
-                    <strong>Mobile:</strong> Use the buttons below!
-                </p>
-            </div>
-        </div>
-
-        <div class="game-stats">
-            <div class="stat-group">
-                <div class="stat">
-                    <span class="stat-label">Level:</span>
-                    <span id="player-level">1</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">XP:</span>
-                    <span id="player-xp">0</span>
-                    <span>/</span>
-                    <span id="player-xp-needed">100</span>
-                </div>
-            </div>
-
-            <div class="stat-group">
-                <div class="stat">
-                    <span class="stat-label">HP:</span>
-                    <div class="bar-container">
-                        <div class="bar health-bar" id="health-bar"></div>
-                        <span class="bar-text" id="health-text">100/100</span>
+        <!-- Top HUD -->
+        <div class="game-hud">
+            <button id="char-menu-btn" class="hud-button">
+                👤 Stats
+            </button>
+            <div class="quick-stats">
+                <div class="quick-health">
+                    <span class="quick-label">HP:</span>
+                    <div class="quick-bar-container">
+                        <div class="quick-bar health-bar" id="quick-health-bar"></div>
                     </div>
+                    <span id="quick-health-text">100/100</span>
+                </div>
+                <div class="quick-level">
+                    Lv.<span id="quick-level">1</span>
                 </div>
             </div>
-
-            <div class="stat-group">
-                <div class="stat">
-                    <span class="stat-label">Attack:</span>
-                    <span id="player-attack">10</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Defense:</span>
-                    <span id="player-defense">5</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Enemies:</span>
-                    <span id="enemies-defeated">0</span>
-                </div>
+            <div class="game-messages-inline">
+                <div id="message-display"></div>
             </div>
         </div>
 
+        <!-- Game Canvas -->
         <div class="canvas-wrapper">
             <canvas id="gameCanvas"></canvas>
+
+            <!-- Overlay Controls -->
+            <div class="game-controls">
+                <div class="control-row">
+                    <button id="btn-up" class="control-btn">↑</button>
+                </div>
+                <div class="control-row">
+                    <button id="btn-left" class="control-btn">←</button>
+                    <button id="btn-down" class="control-btn">↓</button>
+                    <button id="btn-right" class="control-btn">→</button>
+                </div>
+                <div class="attack-row">
+                    <button id="btn-attack" class="control-btn attack-btn">⚔️</button>
+                </div>
+            </div>
         </div>
 
-        <div class="game-messages">
-            <div id="message-display"></div>
-        </div>
+        <!-- Character Menu Modal -->
+        <div id="char-menu" class="char-menu hidden">
+            <div class="char-menu-content">
+                <div class="char-menu-header">
+                    <h2>⚔️ Character Stats</h2>
+                    <button id="char-menu-close" class="close-btn">✕</button>
+                </div>
 
-        <div class="game-controls">
-            <div class="control-row">
-                <button id="btn-up" class="control-btn">↑</button>
-            </div>
-            <div class="control-row">
-                <button id="btn-left" class="control-btn">←</button>
-                <button id="btn-attack" class="control-btn attack-btn">⚔️</button>
-                <button id="btn-right" class="control-btn">→</button>
-            </div>
-            <div class="control-row">
-                <button id="btn-down" class="control-btn">↓</button>
+                <div class="char-menu-body">
+                    <div class="stat-section">
+                        <h3>Level & Experience</h3>
+                        <div class="stat-row">
+                            <span class="stat-label">Level:</span>
+                            <span class="stat-value" id="player-level">1</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">XP:</span>
+                            <span class="stat-value">
+                                <span id="player-xp">0</span> / <span id="player-xp-needed">100</span>
+                            </span>
+                        </div>
+                        <div class="xp-bar-container">
+                            <div class="xp-bar" id="xp-bar"></div>
+                        </div>
+                    </div>
+
+                    <div class="stat-section">
+                        <h3>Health</h3>
+                        <div class="stat-row">
+                            <span class="stat-label">HP:</span>
+                            <span class="stat-value" id="health-text">100/100</span>
+                        </div>
+                        <div class="health-bar-container">
+                            <div class="health-bar-full" id="health-bar"></div>
+                        </div>
+                    </div>
+
+                    <div class="stat-section">
+                        <h3>Combat Stats</h3>
+                        <div class="stat-row">
+                            <span class="stat-label">⚔️ Attack:</span>
+                            <span class="stat-value" id="player-attack">10</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">🛡️ Defense:</span>
+                            <span class="stat-value" id="player-defense">5</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-section">
+                        <h3>Progress</h3>
+                        <div class="stat-row">
+                            <span class="stat-label">💀 Enemies Defeated:</span>
+                            <span class="stat-value" id="enemies-defeated">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">🏰 Current Room:</span>
+                            <span class="stat-value" id="current-room">1</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
