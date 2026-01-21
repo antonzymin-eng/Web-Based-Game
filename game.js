@@ -45,6 +45,7 @@ const VIEWPORT_DEFAULT_ZOOM = 1.0;
 const PINCH_ZOOM_SENSITIVITY = 0.01;
 const WHEEL_ZOOM_STEP = 0.1;
 const DOUBLE_TAP_DELAY = 300; // ms
+const CAMERA_SMOOTHING = 0.15; // Lerp factor for smooth camera (0 = no smoothing, 1 = instant)
 
 // Viewport State for zoom and pan
 const viewport = {
@@ -59,7 +60,10 @@ const viewport = {
     dragStartX: 0,     // Drag start position X
     dragStartY: 0,     // Drag start position Y
     lastTapTime: 0,    // For double-tap detection
-    waitingForDoubleTap: false // Prevents drag during double-tap window
+    waitingForDoubleTap: false, // Prevents drag during double-tap window
+    followPlayer: true, // Should camera follow player
+    lastScale: 1,      // Track last scale for zoom indicator optimization
+    lastFollowPlayer: true // Track last followPlayer state for indicator updates
 };
 
 // Room Templates
@@ -638,20 +642,48 @@ function updateUI() {
 }
 
 function updateZoomIndicator() {
-    const zoomPercent = Math.round(viewport.scale * 100);
+    // Check if anything changed
+    const scaleChanged = Math.abs(viewport.scale - viewport.lastScale) > 0.001;
+    const followChanged = viewport.followPlayer !== viewport.lastFollowPlayer;
+
+    // Only update if something actually changed
+    if (!scaleChanged && !followChanged) {
+        return;
+    }
+
+    // Update tracked values
+    if (scaleChanged) {
+        viewport.lastScale = viewport.scale;
+    }
+    if (followChanged) {
+        viewport.lastFollowPlayer = viewport.followPlayer;
+    }
+
     const zoomLevelElement = document.getElementById('zoom-level');
     const zoomIndicatorElement = document.getElementById('zoom-indicator');
 
-    if (zoomLevelElement) {
+    // Update zoom percentage if scale changed
+    if (scaleChanged && zoomLevelElement) {
+        const zoomPercent = Math.round(viewport.scale * 100);
         zoomLevelElement.textContent = zoomPercent;
     }
 
-    // Fade out indicator if at default zoom
+    // Update visual styling
     if (zoomIndicatorElement) {
+        // Fade out indicator if at default zoom
         if (Math.abs(viewport.scale - VIEWPORT_DEFAULT_ZOOM) < 0.01) {
             zoomIndicatorElement.style.opacity = '0.3';
         } else {
             zoomIndicatorElement.style.opacity = '1';
+        }
+
+        // Change border color to indicate manual camera mode
+        if (viewport.followPlayer) {
+            zoomIndicatorElement.style.borderColor = '#4CAF50'; // Green = following
+            zoomIndicatorElement.style.color = '#4CAF50';
+        } else {
+            zoomIndicatorElement.style.borderColor = '#FFA500'; // Orange = manual
+            zoomIndicatorElement.style.color = '#FFA500';
         }
     }
 }
@@ -934,6 +966,68 @@ function setupCharacterMenu() {
     });
 }
 
+// Camera Follow System
+function updateCameraFollow() {
+    // Only update camera position when following player
+    if (!viewport.followPlayer) {
+        // In manual mode, just clamp the current offset
+        clampPanOffset();
+        return;
+    }
+
+    // Calculate player center position in world coordinates
+    const playerCenterX = player.x + player.width / 2;
+    const playerCenterY = player.y + player.height / 2;
+
+    // Calculate offset to center player on screen
+    // Screen position = offsetX + worldX * scale
+    // We want: CANVAS_WIDTH/2 = offsetX + playerCenterX * scale
+    // Therefore: offsetX = CANVAS_WIDTH/2 - playerCenterX * scale
+    const targetOffsetX = CANVAS_WIDTH / 2 - playerCenterX * viewport.scale;
+    const targetOffsetY = CANVAS_HEIGHT / 2 - playerCenterY * viewport.scale;
+
+    // Apply smooth camera movement with lerp
+    viewport.offsetX += (targetOffsetX - viewport.offsetX) * CAMERA_SMOOTHING;
+    viewport.offsetY += (targetOffsetY - viewport.offsetY) * CAMERA_SMOOTHING;
+
+    // Clamp to keep world visible
+    clampPanOffset();
+}
+
+function clampPanOffset() {
+    // Calculate the scaled dimensions of the game world
+    const scaledWidth = CANVAS_WIDTH * viewport.scale;
+    const scaledHeight = CANVAS_HEIGHT * viewport.scale;
+
+    if (viewport.scale > 1) {
+        // Zoomed in: World is larger than viewport
+        // Clamp to keep edges within view (standard panning bounds)
+        const minOffsetX = -(scaledWidth - CANVAS_WIDTH);
+        const minOffsetY = -(scaledHeight - CANVAS_HEIGHT);
+
+        viewport.offsetX = Math.max(minOffsetX, Math.min(0, viewport.offsetX));
+        viewport.offsetY = Math.max(minOffsetY, Math.min(0, viewport.offsetY));
+    } else {
+        // At 1x or zoomed out: World is smaller than or equal to viewport
+        // Allow panning but keep at least some of the world visible
+        // This allows both camera-follow and manual panning to work
+        const margin = 0.25; // Keep at least 25% of world visible
+        const minVisible = margin * scaledWidth;
+        const minVisibleY = margin * scaledHeight;
+
+        // Max offset: world's left/top edge can be this far to the right/bottom
+        const maxOffsetX = CANVAS_WIDTH - minVisible;
+        const maxOffsetY = CANVAS_HEIGHT - minVisibleY;
+
+        // Min offset: world's right/bottom edge must be at least this far from left/top
+        const minOffsetX = minVisible - scaledWidth;
+        const minOffsetY = minVisibleY - scaledHeight;
+
+        viewport.offsetX = Math.max(minOffsetX, Math.min(maxOffsetX, viewport.offsetX));
+        viewport.offsetY = Math.max(minOffsetY, Math.min(maxOffsetY, viewport.offsetY));
+    }
+}
+
 // Viewport Zoom and Pan Controls
 function setupViewportControls() {
     const canvasWrapper = document.querySelector('.canvas-wrapper');
@@ -956,33 +1050,6 @@ function setupViewportControls() {
             x: (touch1.clientX + touch2.clientX) / 2,
             y: (touch1.clientY + touch2.clientY) / 2
         };
-    }
-
-    // Helper: Clamp pan offset to keep game world visible
-    function clampPanOffset() {
-        // Calculate the scaled dimensions of the game world
-        const scaledWidth = CANVAS_WIDTH * viewport.scale;
-        const scaledHeight = CANVAS_HEIGHT * viewport.scale;
-
-        if (viewport.scale > 1) {
-            // Zoomed in: The game world is larger than the viewport
-            // Allow panning, but keep edges within view
-            // offsetX ranges from 0 (left edge visible) to -(scaledWidth - CANVAS_WIDTH) (right edge visible)
-            const minOffsetX = -(scaledWidth - CANVAS_WIDTH);
-            const minOffsetY = -(scaledHeight - CANVAS_HEIGHT);
-
-            viewport.offsetX = Math.max(minOffsetX, Math.min(0, viewport.offsetX));
-            viewport.offsetY = Math.max(minOffsetY, Math.min(0, viewport.offsetY));
-        } else if (viewport.scale < 1) {
-            // Zoomed out: The game world is smaller than the viewport
-            // Center it and don't allow panning
-            viewport.offsetX = (CANVAS_WIDTH - scaledWidth) / 2;
-            viewport.offsetY = (CANVAS_HEIGHT - scaledHeight) / 2;
-        } else {
-            // At 1x zoom: No offset needed
-            viewport.offsetX = 0;
-            viewport.offsetY = 0;
-        }
     }
 
     // Helper: Check if point is within element bounds
@@ -1030,10 +1097,9 @@ function setupViewportControls() {
             const isDoubleTap = now - viewport.lastTapTime < DOUBLE_TAP_DELAY;
 
             if (isDoubleTap && viewport.waitingForDoubleTap) {
-                // Double tap detected - reset zoom
+                // Double tap detected - reset zoom and re-enable player follow
                 viewport.scale = VIEWPORT_DEFAULT_ZOOM;
-                viewport.offsetX = 0;
-                viewport.offsetY = 0;
+                viewport.followPlayer = true;
                 viewport.lastTapTime = 0;
                 viewport.isDragging = false;
                 viewport.waitingForDoubleTap = false;
@@ -1046,6 +1112,7 @@ function setupViewportControls() {
             viewport.waitingForDoubleTap = true;
 
             // One finger - prepare for pan
+            // Save current offset as drag start point
             viewport.isDragging = true;
             viewport.isZooming = false;
             viewport.dragStartX = touchesOnCanvas[0].clientX - viewport.offsetX;
@@ -1075,6 +1142,9 @@ function setupViewportControls() {
             const oldScale = viewport.scale;
             viewport.scale = Math.max(viewport.minScale, Math.min(viewport.maxScale, viewport.scale + zoomDelta));
 
+            // Disable player follow when manually zooming
+            viewport.followPlayer = false;
+
             // Get center point of pinch for zoom origin
             const center = getTouchCenter(touchesOnCanvas[0], touchesOnCanvas[1]);
             const rect = canvas.getBoundingClientRect();
@@ -1089,7 +1159,10 @@ function setupViewportControls() {
             viewport.lastTouchDistance = currentDistance;
             clampPanOffset();
         } else if (viewport.isDragging && touchesOnCanvas.length === 1) {
-            // Pan the viewport
+            // Pan the viewport manually (disables player follow)
+            viewport.followPlayer = false;
+
+            // Update offset directly based on drag
             viewport.offsetX = touchesOnCanvas[0].clientX - viewport.dragStartX;
             viewport.offsetY = touchesOnCanvas[0].clientY - viewport.dragStartY;
             clampPanOffset();
@@ -1123,6 +1196,9 @@ function setupViewportControls() {
         const zoomDelta = e.deltaY > 0 ? -WHEEL_ZOOM_STEP : WHEEL_ZOOM_STEP;
         const oldScale = viewport.scale;
         viewport.scale = Math.max(viewport.minScale, Math.min(viewport.maxScale, viewport.scale + zoomDelta));
+
+        // Disable player follow when manually zooming
+        viewport.followPlayer = false;
 
         // Zoom towards mouse position
         const rect = canvas.getBoundingClientRect();
@@ -1164,6 +1240,9 @@ if (document.readyState === 'loading') {
 // Game Loop
 function gameLoop() {
     gameState.gameTime++;
+
+    // Update camera to follow player
+    updateCameraFollow();
 
     // Save context state and apply viewport transformation
     ctx.save();
