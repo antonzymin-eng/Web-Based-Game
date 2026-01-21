@@ -173,6 +173,7 @@ body {
     display: block;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
+    object-fit: contain;
 }
 
 /* Virtual Joystick - Bottom Left */
