@@ -650,18 +650,6 @@ function updateUI() {
 
     const xpPercent = (player.xp / player.xpNeeded) * 100;
     document.getElementById('xp-bar').style.width = xpPercent + '%';
-
-    // Update save timestamp (only if menu is visible to avoid unnecessary localStorage reads)
-    const charMenu = document.getElementById('char-menu');
-    const lastSavedElement = document.getElementById('last-saved-time');
-    if (lastSavedElement && charMenu && !charMenu.classList.contains('hidden')) {
-        const metadata = SaveManager.getSaveMetadata();
-        if (metadata && metadata.timestamp) {
-            lastSavedElement.textContent = SaveManager.formatTimeAgo(metadata.timestamp);
-        } else {
-            lastSavedElement.textContent = 'Never';
-        }
-    }
 }
 
 function updateZoomIndicator() {
@@ -1025,6 +1013,36 @@ const SaveManager = {
         if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
         if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
         return `${days} day${days !== 1 ? 's' : ''} ago`;
+    },
+
+    /**
+     * Manually load saved game (user-initiated)
+     * @param {Player} player - The player object to restore
+     * @param {Object} gameState - The game state object to restore
+     * @returns {boolean} True if load succeeded, false otherwise
+     */
+    loadGame(player, gameState) {
+        if (!this.hasSave()) {
+            console.warn('No save file to load');
+            return false;
+        }
+
+        try {
+            const saveData = this.load();
+            if (!saveData) {
+                return false;
+            }
+
+            const success = this.applySave(saveData, player, gameState);
+            if (success) {
+                updateUI();
+                showMessage('Game loaded successfully!');
+            }
+            return success;
+        } catch (e) {
+            console.error('Failed to load game:', e);
+            return false;
+        }
     }
 };
 
@@ -1240,6 +1258,46 @@ function setupCharacterMenu() {
             closeMenu();
         }
     });
+}
+
+// Save/Load Menu Toggle
+function setupSaveMenu() {
+    const saveMenu = document.getElementById('save-menu');
+    const saveMenuBtn = document.getElementById('save-menu-btn');
+    const saveMenuClose = document.getElementById('save-menu-close');
+
+    if (!saveMenu || !saveMenuBtn || !saveMenuClose) {
+        console.error('Save menu elements not found!');
+        return;
+    }
+
+    function openMenu() {
+        saveMenu.classList.remove('hidden');
+        updateSaveMenuInfo(); // Refresh save info when opening
+    }
+
+    function closeMenu() {
+        saveMenu.classList.add('hidden');
+    }
+
+    saveMenuBtn.addEventListener('click', openMenu);
+    saveMenuBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        openMenu();
+    });
+
+    saveMenuClose.addEventListener('click', closeMenu);
+    saveMenuClose.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        closeMenu();
+    });
+
+    // Close when clicking outside
+    saveMenu.addEventListener('click', (e) => {
+        if (e.target === saveMenu) {
+            closeMenu();
+        }
+    });
 
     // Save game button
     const saveBtn = document.getElementById('btn-save-game');
@@ -1248,9 +1306,29 @@ function setupCharacterMenu() {
             const success = SaveManager.save(player, gameState);
             if (success) {
                 showMessage('Game saved successfully!');
-                updateUI(); // Update timestamp immediately
+                updateSaveMenuInfo(); // Update save info immediately
             } else {
                 showMessage('Failed to save game');
+            }
+        });
+    }
+
+    // Load game button
+    const loadBtn = document.getElementById('btn-load-game');
+    if (loadBtn) {
+        loadBtn.addEventListener('click', () => {
+            if (!SaveManager.hasSave()) {
+                showMessage('No save file to load!');
+                return;
+            }
+
+            if (confirm('Load saved game? Current unsaved progress will be lost!')) {
+                const success = SaveManager.loadGame(player, gameState);
+                if (success) {
+                    closeMenu();
+                } else {
+                    showMessage('Failed to load game');
+                }
             }
         });
     }
@@ -1267,6 +1345,7 @@ function setupCharacterMenu() {
                 closeMenu();
 
                 showMessage('New game started!');
+                updateSaveMenuInfo();
             }
         });
     }
@@ -1275,16 +1354,71 @@ function setupCharacterMenu() {
     const deleteBtn = document.getElementById('btn-delete-save');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', () => {
+            if (!SaveManager.hasSave()) {
+                showMessage('No save file to delete!');
+                return;
+            }
+
             if (confirm('Delete your saved game? This cannot be undone!')) {
                 const success = SaveManager.deleteSave();
                 if (success) {
-                    showMessage('Save deleted. Refresh page to start fresh.');
-                    updateUI(); // Update timestamp display
+                    showMessage('Save deleted successfully!');
+                    updateSaveMenuInfo(); // Update display
                 } else {
                     showMessage('Failed to delete save');
                 }
             }
         });
+    }
+}
+
+// Update save menu info display
+function updateSaveMenuInfo() {
+    const lastSavedElement = document.getElementById('save-last-saved');
+    const levelElement = document.getElementById('save-level');
+    const roomElement = document.getElementById('save-room');
+    const enemiesElement = document.getElementById('save-enemies');
+    const loadBtn = document.getElementById('btn-load-game');
+    const deleteBtn = document.getElementById('btn-delete-save');
+
+    const metadata = SaveManager.getSaveMetadata();
+
+    if (metadata && metadata.timestamp) {
+        // Save exists - display info
+        if (lastSavedElement) {
+            lastSavedElement.textContent = SaveManager.formatTimeAgo(metadata.timestamp);
+        }
+        if (levelElement) {
+            levelElement.textContent = metadata.level || '-';
+        }
+        if (roomElement) {
+            roomElement.textContent = (metadata.room !== undefined ? metadata.room + 1 : '-');
+        }
+        if (enemiesElement) {
+            enemiesElement.textContent = metadata.enemiesDefeated || '-';
+        }
+
+        // Enable load and delete buttons
+        if (loadBtn) loadBtn.disabled = false;
+        if (deleteBtn) deleteBtn.disabled = false;
+    } else {
+        // No save exists - display default
+        if (lastSavedElement) {
+            lastSavedElement.textContent = 'Never';
+        }
+        if (levelElement) {
+            levelElement.textContent = '-';
+        }
+        if (roomElement) {
+            roomElement.textContent = '-';
+        }
+        if (enemiesElement) {
+            enemiesElement.textContent = '-';
+        }
+
+        // Disable load and delete buttons
+        if (loadBtn) loadBtn.disabled = true;
+        if (deleteBtn) deleteBtn.disabled = true;
     }
 }
 
@@ -1566,6 +1700,7 @@ function setupViewportControls() {
 function initGame() {
     setupVirtualJoystick();
     setupCharacterMenu();
+    setupSaveMenu();
     setupViewportControls();
     updateUI();
     showMessage('Welcome to the dungeon! Explore and defeat enemies!');

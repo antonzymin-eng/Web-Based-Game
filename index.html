@@ -13,6 +13,9 @@
             <button id="char-menu-btn" class="hud-button">
                 👤 Stats
             </button>
+            <button id="save-menu-btn" class="hud-button save-menu-button">
+                💾 Save/Load
+            </button>
             <div class="quick-stats">
                 <div class="quick-health">
                     <span class="quick-label">HP:</span>
@@ -113,14 +116,45 @@
                             <span class="stat-value" id="current-room">1</span>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
 
-                    <div class="stat-section save-section">
-                        <div class="save-info" id="save-info">
-                            <span class="save-info-label">Last Saved:</span>
-                            <span class="save-info-value" id="last-saved-time">Never</span>
+        <!-- Save/Load Menu Modal -->
+        <div id="save-menu" class="save-menu hidden">
+            <div class="save-menu-content">
+                <div class="save-menu-header">
+                    <h2>💾 Save & Load Game</h2>
+                    <button id="save-menu-close" class="close-btn">✕</button>
+                </div>
+
+                <div class="save-menu-body">
+                    <div class="save-slot-section">
+                        <h3>Current Save</h3>
+                        <div class="save-slot" id="current-save-slot">
+                            <div class="save-slot-info">
+                                <div class="save-slot-row">
+                                    <span class="save-slot-label">Last Saved:</span>
+                                    <span class="save-slot-value" id="save-last-saved">Never</span>
+                                </div>
+                                <div class="save-slot-row" id="save-details-container">
+                                    <div id="save-details">
+                                        <div class="save-detail">Level: <span id="save-level">-</span></div>
+                                        <div class="save-detail">Room: <span id="save-room">-</span></div>
+                                        <div class="save-detail">Enemies: <span id="save-enemies">-</span></div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
+                    </div>
+
+                    <div class="save-actions-section">
+                        <h3>Actions</h3>
                         <button id="btn-save-game" class="menu-btn save-btn">
                             💾 Save Game
+                        </button>
+                        <button id="btn-load-game" class="menu-btn load-btn">
+                            📂 Load Game
                         </button>
                         <button id="btn-new-game" class="menu-btn warning-btn">
                             🔄 Start New Game
