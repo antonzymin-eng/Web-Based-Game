@@ -651,9 +651,10 @@ function updateUI() {
     const xpPercent = (player.xp / player.xpNeeded) * 100;
     document.getElementById('xp-bar').style.width = xpPercent + '%';
 
-    // Update save timestamp
+    // Update save timestamp (only if menu is visible to avoid unnecessary localStorage reads)
+    const charMenu = document.getElementById('char-menu');
     const lastSavedElement = document.getElementById('last-saved-time');
-    if (lastSavedElement) {
+    if (lastSavedElement && charMenu && !charMenu.classList.contains('hidden')) {
         const metadata = SaveManager.getSaveMetadata();
         if (metadata && metadata.timestamp) {
             lastSavedElement.textContent = SaveManager.formatTimeAgo(metadata.timestamp);
@@ -854,6 +855,7 @@ const SaveManager = {
                 },
                 r: gameState.currentRoom,  // Current room
                 ed: gameState.enemiesDefeated,  // Enemies defeated total
+                co: gameState.chestsOpened,  // Chests opened total
                 gt: Math.floor(gameState.gameTime / SAVE_CONSTANTS.FPS_ESTIMATE)  // Game time in seconds
             };
 
@@ -924,6 +926,7 @@ const SaveManager = {
 
             // Restore game state
             gameState.enemiesDefeated = saveData.ed || 0;
+            gameState.chestsOpened = saveData.co || 0;
             gameState.gameTime = (saveData.gt || 0) * SAVE_CONSTANTS.FPS_ESTIMATE;  // Convert back to frames
 
             // Load the saved room (with bounds checking)
@@ -994,6 +997,8 @@ const SaveManager = {
                 timestamp: data.t,
                 level: data.p?.lvl,
                 room: data.r,
+                enemiesDefeated: data.ed,
+                chestsOpened: data.co,
                 playtime: data.gt,
                 version: data.v
             };
@@ -1255,10 +1260,7 @@ function setupCharacterMenu() {
     if (newGameBtn) {
         newGameBtn.addEventListener('click', () => {
             if (confirm('Start a new game? Your current progress will be lost!')) {
-                // Delete save
-                SaveManager.deleteSave();
-
-                // Reset player
+                // Reset player (this will also delete the save)
                 player.reset();
 
                 // Close menu
