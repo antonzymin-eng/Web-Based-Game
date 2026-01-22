@@ -968,9 +968,9 @@ function setupCharacterMenu() {
 
 // Camera Follow System
 function updateCameraFollow() {
-    // Only update camera position when following player and zoomed in
-    if (!viewport.followPlayer || viewport.scale <= 1.0) {
-        // In manual mode or when not zoomed in, just clamp the current offset
+    // Only update camera position when following player
+    if (!viewport.followPlayer) {
+        // In manual mode, just clamp the current offset
         clampPanOffset();
         return;
     }
@@ -1129,9 +1129,6 @@ function setupViewportControls() {
             const oldScale = viewport.scale;
             viewport.scale = Math.max(viewport.minScale, Math.min(viewport.maxScale, viewport.scale + zoomDelta));
 
-            // Disable player follow when manually zooming
-            viewport.followPlayer = false;
-
             // Get center point of pinch for zoom origin
             const center = getTouchCenter(touchesOnCanvas[0], touchesOnCanvas[1]);
             const rect = canvas.getBoundingClientRect();
@@ -1183,9 +1180,6 @@ function setupViewportControls() {
         const zoomDelta = e.deltaY > 0 ? -WHEEL_ZOOM_STEP : WHEEL_ZOOM_STEP;
         const oldScale = viewport.scale;
         viewport.scale = Math.max(viewport.minScale, Math.min(viewport.maxScale, viewport.scale + zoomDelta));
-
-        // Disable player follow when manually zooming
-        viewport.followPlayer = false;
 
         // Zoom towards mouse position
         const rect = canvas.getBoundingClientRect();
