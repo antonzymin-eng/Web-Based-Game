@@ -1193,12 +1193,24 @@ function setupViewportControls() {
             viewport.isZooming = false;
         }
         if (touchesOnCanvas.length === 0) {
+            // All touches ended - reset drag state
             viewport.isDragging = false;
+            viewport.dragThresholdMet = false;
         } else if (touchesOnCanvas.length === 1 && !viewport.isZooming) {
-            // Continue dragging with remaining finger
-            viewport.isDragging = true;
-            viewport.dragStartX = touchesOnCanvas[0].clientX - viewport.offsetX;
-            viewport.dragStartY = touchesOnCanvas[0].clientY - viewport.offsetY;
+            // One finger remains - only continue drag if threshold was already met
+            if (viewport.dragThresholdMet && viewport.isDragging) {
+                // Continue existing drag with remaining finger
+                viewport.dragStartX = touchesOnCanvas[0].clientX - viewport.offsetX;
+                viewport.dragStartY = touchesOnCanvas[0].clientY - viewport.offsetY;
+            } else {
+                // Start fresh - treat as new potential drag
+                viewport.touchStartX = touchesOnCanvas[0].clientX;
+                viewport.touchStartY = touchesOnCanvas[0].clientY;
+                viewport.dragThresholdMet = false;
+                viewport.isDragging = false;
+                viewport.dragStartX = touchesOnCanvas[0].clientX - viewport.offsetX;
+                viewport.dragStartY = touchesOnCanvas[0].clientY - viewport.offsetY;
+            }
         }
     }
 
