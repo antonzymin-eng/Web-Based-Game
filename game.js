@@ -871,9 +871,7 @@ const SaveManager = {
         if (!saveData) return false;
 
         try {
-            // Restore player stats
-            player.x = saveData.p.x;
-            player.y = saveData.p.y;
+            // Restore player stats (except position - will restore after loadRoom)
             player.level = saveData.p.lvl;
             player.xp = saveData.p.xp;
             player.xpNeeded = saveData.p.xpn;
@@ -894,7 +892,11 @@ const SaveManager = {
 
             // Load the saved room (with bounds checking)
             const roomIndex = Math.min(Math.max(0, saveData.r || 0), roomTemplates.length - 1);
-            loadRoom(roomIndex);
+            loadRoom(roomIndex, true); // Skip auto-save when loading from save
+
+            // NOW restore position (after loadRoom so it doesn't get overwritten)
+            player.x = saveData.p.x;
+            player.y = saveData.p.y;
 
             return true;
         } catch (e) {
