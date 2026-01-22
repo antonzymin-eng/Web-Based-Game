@@ -45,6 +45,7 @@ const VIEWPORT_DEFAULT_ZOOM = 1.0;
 const PINCH_ZOOM_SENSITIVITY = 0.01;
 const WHEEL_ZOOM_STEP = 0.1;
 const DOUBLE_TAP_DELAY = 300; // ms
+const DRAG_THRESHOLD = 10; // pixels - minimum movement to trigger drag and disable camera follow
 const CAMERA_SMOOTHING = 0.15; // Lerp factor for smooth camera (0 = no smoothing, 1 = instant)
 
 // Viewport State for zoom and pan
@@ -59,6 +60,9 @@ const viewport = {
     lastTouchDistance: 0, // Last distance between two touch points
     dragStartX: 0,     // Drag start position X
     dragStartY: 0,     // Drag start position Y
+    touchStartX: 0,    // Initial touch X for drag threshold
+    touchStartY: 0,    // Initial touch Y for drag threshold
+    dragThresholdMet: false, // Has movement exceeded drag threshold
     lastTapTime: 0,    // For double-tap detection
     waitingForDoubleTap: false, // Prevents drag during double-tap window
     followPlayer: true, // Should camera follow player
@@ -1001,27 +1005,27 @@ function clampPanOffset() {
 
     if (viewport.scale > 1) {
         // Zoomed in: World is larger than viewport
-        // Clamp to keep world edges within view (prevent panning too far)
-        const minOffsetX = -(scaledWidth - CANVAS_WIDTH);
-        const minOffsetY = -(scaledHeight - CANVAS_HEIGHT);
+        // Allow small margin (10% of viewport) for better camera follow near edges
+        // This is a compromise: mostly respects world boundaries but allows some centering
+        const margin = 0.1;
+        const maxEmptySpace = CANVAS_WIDTH * margin;
+        const maxEmptySpaceY = CANVAS_HEIGHT * margin;
 
-        viewport.offsetX = Math.max(minOffsetX, Math.min(0, viewport.offsetX));
-        viewport.offsetY = Math.max(minOffsetY, Math.min(0, viewport.offsetY));
-    } else {
-        // At 1x or zoomed out: World fits in viewport, but allow limited offset
-        // for camera follow while preventing too much empty space
-        const margin = 0.35; // Allow up to 35% empty space for camera follow
-        const maxEmptySpace = margin * CANVAS_WIDTH;
-        const maxEmptySpaceY = margin * CANVAS_HEIGHT;
-
-        // Offset can range to show some empty space but keep most of world visible
+        // Max offset: Small positive values allowed for centering near top-left
         const maxOffsetX = maxEmptySpace;
-        const minOffsetX = -(scaledWidth - CANVAS_WIDTH) - maxEmptySpace;
         const maxOffsetY = maxEmptySpaceY;
+
+        // Min offset: Bounds for bottom-right with small margin
+        const minOffsetX = -(scaledWidth - CANVAS_WIDTH) - maxEmptySpace;
         const minOffsetY = -(scaledHeight - CANVAS_HEIGHT) - maxEmptySpaceY;
 
         viewport.offsetX = Math.max(minOffsetX, Math.min(maxOffsetX, viewport.offsetX));
         viewport.offsetY = Math.max(minOffsetY, Math.min(maxOffsetY, viewport.offsetY));
+    } else {
+        // At 1x or zoomed out: World fits entirely in viewport
+        // Center the world - camera follow not needed at this scale
+        viewport.offsetX = (CANVAS_WIDTH - scaledWidth) / 2;
+        viewport.offsetY = (CANVAS_HEIGHT - scaledHeight) / 2;
     }
 }
 
@@ -1108,9 +1112,12 @@ function setupViewportControls() {
             viewport.lastTapTime = now;
             viewport.waitingForDoubleTap = true;
 
-            // One finger - prepare for pan
-            // Save current offset as drag start point
-            viewport.isDragging = true;
+            // One finger - prepare for potential pan
+            // Save initial touch position for drag threshold check
+            viewport.touchStartX = touchesOnCanvas[0].clientX;
+            viewport.touchStartY = touchesOnCanvas[0].clientY;
+            viewport.dragThresholdMet = false;
+            viewport.isDragging = false; // Don't set true yet - wait for threshold
             viewport.isZooming = false;
             viewport.dragStartX = touchesOnCanvas[0].clientX - viewport.offsetX;
             viewport.dragStartY = touchesOnCanvas[0].clientY - viewport.offsetY;
@@ -1152,14 +1159,28 @@ function setupViewportControls() {
 
             viewport.lastTouchDistance = currentDistance;
             clampPanOffset();
-        } else if (viewport.isDragging && touchesOnCanvas.length === 1) {
-            // Pan the viewport manually (disables player follow)
-            viewport.followPlayer = false;
+        } else if (touchesOnCanvas.length === 1 && !viewport.isZooming) {
+            // Check if drag threshold has been met
+            if (!viewport.dragThresholdMet) {
+                const deltaX = touchesOnCanvas[0].clientX - viewport.touchStartX;
+                const deltaY = touchesOnCanvas[0].clientY - viewport.touchStartY;
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
-            // Update offset directly based on drag
-            viewport.offsetX = touchesOnCanvas[0].clientX - viewport.dragStartX;
-            viewport.offsetY = touchesOnCanvas[0].clientY - viewport.dragStartY;
-            clampPanOffset();
+                if (distance > DRAG_THRESHOLD) {
+                    // Threshold exceeded - activate dragging and disable camera follow
+                    viewport.dragThresholdMet = true;
+                    viewport.isDragging = true;
+                    viewport.followPlayer = false;
+                }
+            }
+
+            // Only pan if drag threshold has been met
+            if (viewport.isDragging) {
+                // Update offset directly based on drag
+                viewport.offsetX = touchesOnCanvas[0].clientX - viewport.dragStartX;
+                viewport.offsetY = touchesOnCanvas[0].clientY - viewport.dragStartY;
+                clampPanOffset();
+            }
         }
     }
 
