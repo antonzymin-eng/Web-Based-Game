@@ -968,9 +968,9 @@ function setupCharacterMenu() {
 
 // Camera Follow System
 function updateCameraFollow() {
-    // Only update camera position when following player
-    if (!viewport.followPlayer) {
-        // In manual mode, just clamp the current offset
+    // Only update camera position when following player and zoomed in
+    if (!viewport.followPlayer || viewport.scale <= 1.0) {
+        // In manual mode or when not zoomed in, just clamp the current offset
         clampPanOffset();
         return;
     }
@@ -1008,23 +1008,10 @@ function clampPanOffset() {
         viewport.offsetX = Math.max(minOffsetX, Math.min(0, viewport.offsetX));
         viewport.offsetY = Math.max(minOffsetY, Math.min(0, viewport.offsetY));
     } else {
-        // At 1x or zoomed out: World is smaller than or equal to viewport
-        // Allow panning but keep at least some of the world visible
-        // This allows both camera-follow and manual panning to work
-        const margin = 0.25; // Keep at least 25% of world visible
-        const minVisible = margin * scaledWidth;
-        const minVisibleY = margin * scaledHeight;
-
-        // Max offset: world's left/top edge can be this far to the right/bottom
-        const maxOffsetX = CANVAS_WIDTH - minVisible;
-        const maxOffsetY = CANVAS_HEIGHT - minVisibleY;
-
-        // Min offset: world's right/bottom edge must be at least this far from left/top
-        const minOffsetX = minVisible - scaledWidth;
-        const minOffsetY = minVisibleY - scaledHeight;
-
-        viewport.offsetX = Math.max(minOffsetX, Math.min(maxOffsetX, viewport.offsetX));
-        viewport.offsetY = Math.max(minOffsetY, Math.min(maxOffsetY, viewport.offsetY));
+        // At 1x or zoomed out: World fits entirely in viewport or is smaller
+        // Center the world in the viewport to prevent showing empty space
+        viewport.offsetX = (CANVAS_WIDTH - scaledWidth) / 2;
+        viewport.offsetY = (CANVAS_HEIGHT - scaledHeight) / 2;
     }
 }
 
