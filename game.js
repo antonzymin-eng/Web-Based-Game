@@ -894,9 +894,13 @@ const SaveManager = {
      * @returns {boolean} True if successfully applied, false otherwise
      */
     applySave(saveData, player, gameState) {
-        if (!saveData) return false;
+        if (!saveData) {
+            console.error('[SaveManager] applySave: No save data provided');
+            return false;
+        }
 
         try {
+            console.log('[SaveManager] Restoring player stats');
             // Restore player stats (except position - will restore after loadRoom)
             player.level = saveData.p.lvl;
             player.xp = saveData.p.xp;
@@ -912,6 +916,7 @@ const SaveManager = {
             player.invulnerableTimer = 0;
             player.isAttacking = false;
 
+            console.log('[SaveManager] Restoring game state');
             // Restore game state
             gameState.enemiesDefeated = saveData.ed || 0;
             gameState.chestsOpened = saveData.co || 0;
@@ -919,15 +924,18 @@ const SaveManager = {
 
             // Load the saved room (with bounds checking)
             const roomIndex = Math.min(Math.max(0, saveData.r || 0), roomTemplates.length - 1);
+            console.log(`[SaveManager] Loading room ${roomIndex}`);
             loadRoom(roomIndex, true); // Skip auto-save when loading from save
 
             // NOW restore position (after loadRoom so it doesn't get overwritten)
+            console.log(`[SaveManager] Restoring player position to (${saveData.p.x}, ${saveData.p.y})`);
             player.x = saveData.p.x;
             player.y = saveData.p.y;
 
+            console.log('[SaveManager] Save data applied successfully');
             return true;
         } catch (e) {
-            console.error('Failed to apply save:', e);
+            console.error('[SaveManager] Failed to apply save:', e);
             return false;
         }
     },
@@ -1033,25 +1041,33 @@ const SaveManager = {
      * @returns {boolean} True if load succeeded, false otherwise
      */
     loadGame(player, gameState) {
+        console.log('[SaveManager] loadGame called');
+
         if (!this.hasSave()) {
-            console.warn('No save file to load');
+            console.warn('[SaveManager] No save file to load');
             return false;
         }
 
         try {
+            console.log('[SaveManager] Loading save data...');
             const saveData = this.load();
             if (!saveData) {
+                console.error('[SaveManager] Failed to load save data');
                 return false;
             }
 
+            console.log('[SaveManager] Applying save data:', saveData);
             const success = this.applySave(saveData, player, gameState);
             if (success) {
+                console.log('[SaveManager] Save applied successfully, updating UI');
                 updateUI();
                 showMessage('Game loaded successfully!');
+            } else {
+                console.error('[SaveManager] Failed to apply save data');
             }
             return success;
         } catch (e) {
-            console.error('Failed to load game:', e);
+            console.error('[SaveManager] Failed to load game:', e);
             return false;
         }
     }
@@ -1242,6 +1258,10 @@ function setupCharacterMenu() {
         return;
     }
 
+    // Ensure menu is hidden on initialization (defensive programming)
+    charMenu.classList.add('hidden');
+    charMenu.setAttribute('aria-hidden', 'true');
+
     function openMenu() {
         charMenu.classList.remove('hidden');
         charMenu.setAttribute('aria-hidden', 'false');
@@ -1278,6 +1298,10 @@ function setupSaveMenu() {
         console.error('Save menu elements not found!');
         return;
     }
+
+    // Ensure menu is hidden on initialization (defensive programming)
+    saveMenu.classList.add('hidden');
+    saveMenu.setAttribute('aria-hidden', 'true');
 
     // Debounce state for save button
     let saveDebounceTimer = null;
@@ -1347,20 +1371,31 @@ function setupSaveMenu() {
     const loadBtn = document.getElementById('btn-load-game');
     if (loadBtn) {
         loadBtn.addEventListener('click', () => {
+            console.log('[UI] Load game button clicked');
+
             if (!SaveManager.hasSave()) {
+                console.log('[UI] No save file exists');
                 showMessage('No save file to load!');
                 return;
             }
 
             if (confirm('Load saved game? Current unsaved progress will be lost!')) {
+                console.log('[UI] User confirmed load');
                 const success = SaveManager.loadGame(player, gameState);
                 if (success) {
+                    console.log('[UI] Load successful, closing menu');
                     closeMenu();
                 } else {
+                    console.error('[UI] Load failed');
                     showMessage('Failed to load game');
                 }
+            } else {
+                console.log('[UI] User cancelled load');
             }
         });
+        console.log('[UI] Load button event listener attached');
+    } else {
+        console.error('[UI] Load button not found!');
     }
 
     // Start new game button
@@ -1400,6 +1435,8 @@ function setupSaveMenu() {
             }
         });
     }
+
+    console.log('[UI] Save menu setup complete');
 
     // Return close function for keyboard handler
     return { closeMenu, isOpen: () => !saveMenu.classList.contains('hidden') };
