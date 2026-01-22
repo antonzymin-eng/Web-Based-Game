@@ -5,6 +5,7 @@ A browser-based dungeon crawler RPG with smooth touch controls, progressive diff
 ## Features
 
 - **Multi-platform Controls**: Full keyboard and touch/mobile support
+- **Tab Targeting System**: MMO-style enemy targeting with range indicators ([Guide](.github/TAB_TARGETING_GUIDE.md))
 - **Progressive Difficulty**: 3 interconnected rooms with increasing challenge
 - **RPG Mechanics**: Level-up system with stat growth (HP, Attack, Defense)
 - **Enemy Variety**: Basic and strong enemy types with distinct behaviors
@@ -24,6 +25,7 @@ Navigate through three interconnected dungeon rooms, defeat enemies, collect tre
 #### Desktop (Keyboard + Mouse)
 - **Movement**: Arrow Keys or WASD
 - **Attack**: Space or Enter
+- **Target Enemy**: Tab (next), Shift+Tab (previous), or Click enemy
 - **Zoom**: Mouse wheel
 - **Pan Camera**: Click and drag on canvas
 - **Reset View**: Double-click canvas
@@ -31,15 +33,18 @@ Navigate through three interconnected dungeon rooms, defeat enemies, collect tre
 
 #### Mobile (Touch)
 - **Movement**: Virtual joystick (bottom-left)
-- **Attack**: Attack button (bottom-right)
+- **Attack**: Attack button (⚔️, bottom-right)
+- **Target Enemy**: Target button (🎯, above attack) or Tap enemy
 - **Zoom**: Pinch gesture on canvas
 - **Pan Camera**: Drag canvas with one finger
 - **Reset View**: Double-tap canvas
 - **Stats Menu**: Tap "Stats" button
 
 ### Gameplay Tips
+- **Tab Targeting**: Use Tab to select specific enemies - gold border = in range, orange = out of range
 - **Range Advantage**: Your attack range (45px) exceeds enemy range (35px) - use it!
 - **Kiting**: Move away while attacking to avoid damage
+- **Prioritize Threats**: Focus on strong enemies (dark red) first with tab targeting
 - **Defense Scaling**: Defense reduces damage by half its value
 - **Strategic Healing**: Save chest health potions for when you need them
 - **Level Curve**: Each level requires 50% more XP than the previous
