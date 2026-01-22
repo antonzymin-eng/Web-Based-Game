@@ -999,30 +999,22 @@ function clampPanOffset() {
     const scaledWidth = CANVAS_WIDTH * viewport.scale;
     const scaledHeight = CANVAS_HEIGHT * viewport.scale;
 
-    if (viewport.scale > 1) {
-        // Zoomed in: World is larger than viewport
-        // Clamp to keep world edges within view (prevent panning too far)
-        const minOffsetX = -(scaledWidth - CANVAS_WIDTH);
-        const minOffsetY = -(scaledHeight - CANVAS_HEIGHT);
+    // For camera follow to work, we need to allow some empty space even when zoomed in
+    // Otherwise we can't center players near the edges
+    // Allow up to half-screen of empty space on each side
+    const maxEmptySpace = CANVAS_WIDTH / 2;
+    const maxEmptySpaceY = CANVAS_HEIGHT / 2;
 
-        viewport.offsetX = Math.max(minOffsetX, Math.min(0, viewport.offsetX));
-        viewport.offsetY = Math.max(minOffsetY, Math.min(0, viewport.offsetY));
-    } else {
-        // At 1x or zoomed out: World fits in viewport, but allow limited offset
-        // for camera follow while preventing too much empty space
-        const margin = 0.35; // Allow up to 35% empty space for camera follow
-        const maxEmptySpace = margin * CANVAS_WIDTH;
-        const maxEmptySpaceY = margin * CANVAS_HEIGHT;
+    // Max offset: How far right/down we can shift (showing empty space on left/top)
+    const maxOffsetX = maxEmptySpace;
+    const maxOffsetY = maxEmptySpaceY;
 
-        // Offset can range to show some empty space but keep most of world visible
-        const maxOffsetX = maxEmptySpace;
-        const minOffsetX = -(scaledWidth - CANVAS_WIDTH) - maxEmptySpace;
-        const maxOffsetY = maxEmptySpaceY;
-        const minOffsetY = -(scaledHeight - CANVAS_HEIGHT) - maxEmptySpaceY;
+    // Min offset: How far left/up we can shift (showing empty space on right/bottom)
+    const minOffsetX = -(scaledWidth - CANVAS_WIDTH) - maxEmptySpace;
+    const minOffsetY = -(scaledHeight - CANVAS_HEIGHT) - maxEmptySpaceY;
 
-        viewport.offsetX = Math.max(minOffsetX, Math.min(maxOffsetX, viewport.offsetX));
-        viewport.offsetY = Math.max(minOffsetY, Math.min(maxOffsetY, viewport.offsetY));
-    }
+    viewport.offsetX = Math.max(minOffsetX, Math.min(maxOffsetX, viewport.offsetX));
+    viewport.offsetY = Math.max(minOffsetY, Math.min(maxOffsetY, viewport.offsetY));
 }
 
 // Viewport Zoom and Pan Controls
