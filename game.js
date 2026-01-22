@@ -25,6 +25,7 @@ canvas.height = CANVAS_HEIGHT;
 const gameState = {
     keys: {},
     enemies: [],
+    selectedEnemy: null, // Currently targeted enemy for tab targeting
     walls: [],
     doors: [],
     chests: [],
@@ -306,10 +307,17 @@ class Player {
             this.isAttacking = true;
             this.attackCooldown = 30;
 
-            // Check if hitting any enemies
-            for (let enemy of gameState.enemies) {
-                if (this.checkAttackHit(enemy)) {
-                    this.dealDamage(enemy);
+            // Attack selected target only (tab targeting)
+            if (gameState.selectedEnemy && !gameState.selectedEnemy.isDead) {
+                // Attack selected enemy if in range
+                if (this.checkAttackHit(gameState.selectedEnemy)) {
+                    this.dealDamage(gameState.selectedEnemy);
+                }
+            } else {
+                // If no target selected, auto-select nearest enemy and attack
+                selectNearestEnemy();
+                if (gameState.selectedEnemy && this.checkAttackHit(gameState.selectedEnemy)) {
+                    this.dealDamage(gameState.selectedEnemy);
                 }
             }
 
@@ -551,14 +559,65 @@ class Enemy {
         createParticles(this.x + this.width / 2, this.y + this.height / 2, this.color, 15);
         updateUI();
 
-        const index = gameState.enemies.indexOf(this);
-        if (index > -1) {
-            gameState.enemies.splice(index, 1);
+        // Auto-select next enemy if killed target dies
+        if (gameState.selectedEnemy === this) {
+            const index = gameState.enemies.indexOf(this);
+            if (index > -1) {
+                gameState.enemies.splice(index, 1);
+            }
+            // Select nearest remaining enemy
+            if (gameState.enemies.length > 0) {
+                selectNearestEnemy();
+            } else {
+                gameState.selectedEnemy = null;
+            }
+        } else {
+            const index = gameState.enemies.indexOf(this);
+            if (index > -1) {
+                gameState.enemies.splice(index, 1);
+            }
         }
     }
 
     draw() {
         if (this.isDead) return;
+
+        // Draw selection indicator if this enemy is targeted
+        if (gameState.selectedEnemy === this) {
+            // Check if enemy is in attack range (using squared distance for performance)
+            const playerCenterX = player.x + player.width / 2;
+            const playerCenterY = player.y + player.height / 2;
+            const enemyCenterX = this.x + this.width / 2;
+            const enemyCenterY = this.y + this.height / 2;
+            const distanceSquared = getDistanceSquared(playerCenterX, playerCenterY, enemyCenterX, enemyCenterY);
+            const attackRangeSquared = (player.attackRange + this.width / 2) * (player.attackRange + this.width / 2);
+            const inRange = distanceSquared <= attackRangeSquared;
+
+            // Color-code: Gold (in range), Orange (out of range)
+            const indicatorColor = inRange ? '#FFD700' : '#FFA500';
+
+            // Border outline
+            ctx.strokeStyle = indicatorColor;
+            ctx.lineWidth = 3;
+            ctx.strokeRect(this.x - 2, this.y - 2, this.width + 4, this.height + 4);
+
+            // Targeting chevron above enemy
+            ctx.fillStyle = indicatorColor;
+            ctx.beginPath();
+            ctx.moveTo(this.x + this.width / 2, this.y - 10);
+            ctx.lineTo(this.x + this.width / 2 - 5, this.y - 5);
+            ctx.lineTo(this.x + this.width / 2 + 5, this.y - 5);
+            ctx.fill();
+
+            // Range indicator text (optional - shows exact distance)
+            if (!inRange) {
+                const distance = Math.round(Math.sqrt(distanceSquared));
+                ctx.fillStyle = '#FFA500';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`${distance}px`, this.x + this.width / 2, this.y - 15);
+            }
+        }
 
         ctx.fillStyle = this.color;
         ctx.fillRect(this.x, this.y, this.width, this.height);
@@ -612,6 +671,105 @@ class Particle {
     isDead() {
         return this.life <= 0;
     }
+}
+
+// Target Selection Functions
+
+// Utility: Calculate squared distance (avoids expensive sqrt for comparisons)
+function getDistanceSquared(x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    return dx * dx + dy * dy;
+}
+
+// Utility: Get distance between two entities
+function getEntityDistance(entity1, entity2) {
+    const x1 = entity1.x + entity1.width / 2;
+    const y1 = entity1.y + entity1.height / 2;
+    const x2 = entity2.x + entity2.width / 2;
+    const y2 = entity2.y + entity2.height / 2;
+    return Math.sqrt(getDistanceSquared(x1, y1, x2, y2));
+}
+
+function selectNearestEnemy() {
+    // Edge case: No enemies or player not initialized
+    if (!player || gameState.enemies.length === 0) {
+        gameState.selectedEnemy = null;
+        return;
+    }
+
+    // Cache player center position (avoid recalculating in sort)
+    const playerCenterX = player.x + player.width / 2;
+    const playerCenterY = player.y + player.height / 2;
+
+    // Sort enemies by distance (using squared distance to avoid sqrt)
+    const sorted = gameState.enemies.slice().sort((a, b) => {
+        const enemyACenterX = a.x + a.width / 2;
+        const enemyACenterY = a.y + a.height / 2;
+        const enemyBCenterX = b.x + b.width / 2;
+        const enemyBCenterY = b.y + b.height / 2;
+
+        const distSqA = getDistanceSquared(playerCenterX, playerCenterY, enemyACenterX, enemyACenterY);
+        const distSqB = getDistanceSquared(playerCenterX, playerCenterY, enemyBCenterX, enemyBCenterY);
+
+        return distSqA - distSqB;
+    });
+
+    gameState.selectedEnemy = sorted[0];
+}
+
+function cycleTarget(direction = 1) {
+    if (gameState.enemies.length === 0) {
+        gameState.selectedEnemy = null;
+        showMessage('No targets available');
+        return;
+    }
+
+    // If no target selected or current target is dead, select nearest
+    if (!gameState.selectedEnemy || !gameState.enemies.includes(gameState.selectedEnemy)) {
+        selectNearestEnemy();
+        if (gameState.selectedEnemy) {
+            const enemyName = gameState.selectedEnemy.type === 'basic' ? 'Goblin' : 'Orc';
+            showMessage(`Target: ${enemyName}`);
+        }
+        return;
+    }
+
+    // Cycle to next/previous enemy
+    const currentIndex = gameState.enemies.indexOf(gameState.selectedEnemy);
+    let nextIndex = (currentIndex + direction + gameState.enemies.length) % gameState.enemies.length;
+    gameState.selectedEnemy = gameState.enemies[nextIndex];
+
+    // Visual feedback
+    const enemyName = gameState.selectedEnemy.type === 'basic' ? 'Goblin' : 'Orc';
+    const distance = Math.round(getEntityDistance(player, gameState.selectedEnemy));
+    showMessage(`Target: ${enemyName} (${distance}px)`);
+}
+
+function screenToWorld(screenX, screenY) {
+    // Convert screen coordinates to world coordinates accounting for viewport
+    if (!canvas) return { x: 0, y: 0 }; // Defensive check
+
+    const rect = canvas.getBoundingClientRect();
+    const canvasX = screenX - rect.left;
+    const canvasY = screenY - rect.top;
+
+    // Account for viewport scale and offset
+    const worldX = (canvasX - viewport.offsetX) / viewport.scale;
+    const worldY = (canvasY - viewport.offsetY) / viewport.scale;
+
+    return { x: worldX, y: worldY };
+}
+
+function getEnemyAtPosition(worldX, worldY) {
+    // Check if world coordinates are within any enemy's bounds
+    for (let enemy of gameState.enemies) {
+        if (worldX >= enemy.x && worldX <= enemy.x + enemy.width &&
+            worldY >= enemy.y && worldY <= enemy.y + enemy.height) {
+            return enemy;
+        }
+    }
+    return null;
 }
 
 // Helper Functions
@@ -728,6 +886,11 @@ function loadRoom(roomIndex, skipSave = false) {
     room.enemies.forEach(e => {
         gameState.enemies.push(new Enemy(e.x, e.y, e.type));
     });
+
+    // Auto-select nearest enemy when entering room
+    if (gameState.enemies.length > 0) {
+        selectNearestEnemy();
+    }
 
     // Position player at door entrance
     if (roomIndex === 0) {
@@ -1088,6 +1251,13 @@ if (saveData) {
 
 // Keyboard input
 window.addEventListener('keydown', (e) => {
+    // Handle Tab for target cycling
+    if (e.key === 'Tab') {
+        e.preventDefault(); // Prevent browser tab navigation
+        cycleTarget(e.shiftKey ? -1 : 1);
+        return;
+    }
+
     gameState.keys[e.key] = true;
 
     // Manual save shortcut (Ctrl+S or Cmd+S)
@@ -1109,9 +1279,10 @@ function setupVirtualJoystick() {
     const joystickBase = document.getElementById('joystick-base');
     const joystickStick = document.getElementById('joystick-stick');
     const attackBtn = document.getElementById('btn-attack');
+    const targetBtn = document.getElementById('btn-target');
 
-    if (!joystickBase || !joystickStick || !attackBtn) {
-        console.error('Joystick or attack button elements not found!');
+    if (!joystickBase || !joystickStick || !attackBtn || !targetBtn) {
+        console.error('Joystick or control button elements not found!');
         return;
     }
 
@@ -1244,6 +1415,17 @@ function setupVirtualJoystick() {
     attackBtn.addEventListener('mouseup', (e) => {
         e.preventDefault();
         gameState.keys[' '] = false;
+    });
+
+    // Target button
+    targetBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        cycleTarget(1);
+    });
+
+    targetBtn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        cycleTarget(1);
     });
 }
 
@@ -1619,10 +1801,12 @@ function setupViewportControls() {
         // Exclude touches on joystick and buttons
         const joystickBase = document.getElementById('joystick-base');
         const attackBtn = document.getElementById('btn-attack');
+        const targetBtn = document.getElementById('btn-target');
         const charMenuBtn = document.getElementById('char-menu-btn');
 
         return !isPointInElement(touch, joystickBase) &&
                !isPointInElement(touch, attackBtn) &&
+               !isPointInElement(touch, targetBtn) &&
                !isPointInElement(touch, charMenuBtn);
     }
 
@@ -1740,7 +1924,34 @@ function setupViewportControls() {
             viewport.isZooming = false;
         }
         if (touchesOnCanvas.length === 0) {
-            // All touches ended - reset drag state
+            // All touches ended
+            // Check for tap-to-select enemy (single tap that wasn't a drag)
+            if (!viewport.dragThresholdMet && viewport.touchStartX && viewport.touchStartY) {
+                // Get the touch end position from changedTouches
+                const changedTouch = e.changedTouches[0];
+                if (changedTouch) {
+                    // Check if this was a single tap (minimal movement)
+                    const deltaX = changedTouch.clientX - viewport.touchStartX;
+                    const deltaY = changedTouch.clientY - viewport.touchStartY;
+                    const tapDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+                    // If movement was minimal and not waiting for double-tap zoom
+                    if (tapDistance < 5 && !viewport.waitingForDoubleTap) {
+                        // Convert to world coordinates and check for enemy hit
+                        const worldPos = screenToWorld(changedTouch.clientX, changedTouch.clientY);
+                        const tappedEnemy = getEnemyAtPosition(worldPos.x, worldPos.y);
+
+                        // Only select if enemy is alive
+                        if (tappedEnemy && !tappedEnemy.isDead) {
+                            gameState.selectedEnemy = tappedEnemy;
+                            const enemyName = tappedEnemy.type === 'basic' ? 'Goblin' : 'Orc';
+                            showMessage(`Target: ${enemyName}`);
+                        }
+                    }
+                }
+            }
+
+            // Reset drag state
             viewport.isDragging = false;
             viewport.dragThresholdMet = false;
         } else if (touchesOnCanvas.length === 1 && !viewport.isZooming) {
@@ -1783,12 +1994,34 @@ function setupViewportControls() {
         clampPanOffset();
     }
 
+    // Mouse Click Handler (desktop) - for enemy selection
+    function handleClick(e) {
+        // Only handle left clicks on canvas
+        if (e.button !== 0) return;
+        if (!isTouchOnCanvas({ clientX: e.clientX, clientY: e.clientY })) return;
+
+        // Ignore clicks that were part of a drag
+        if (viewport.dragThresholdMet) return;
+
+        // Convert to world coordinates and check for enemy hit
+        const worldPos = screenToWorld(e.clientX, e.clientY);
+        const clickedEnemy = getEnemyAtPosition(worldPos.x, worldPos.y);
+
+        // Only select if enemy is alive
+        if (clickedEnemy && !clickedEnemy.isDead) {
+            gameState.selectedEnemy = clickedEnemy;
+            const enemyName = clickedEnemy.type === 'basic' ? 'Goblin' : 'Orc';
+            showMessage(`Target: ${enemyName}`);
+        }
+    }
+
     // Attach event listeners to canvas wrapper
     canvasWrapper.addEventListener('touchstart', handleTouchStart, { passive: false });
     canvasWrapper.addEventListener('touchmove', handleTouchMove, { passive: false });
     canvasWrapper.addEventListener('touchend', handleTouchEnd, { passive: false });
     canvasWrapper.addEventListener('touchcancel', handleTouchEnd, { passive: false });
     canvasWrapper.addEventListener('wheel', handleWheel, { passive: false });
+    canvasWrapper.addEventListener('click', handleClick);
 }
 
 // Initialize game
