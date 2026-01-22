@@ -267,6 +267,9 @@ body {
     right: calc(env(safe-area-inset-right, 0px) + 30px);
     z-index: 50;
     pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
 }
 
 .action-btn {
@@ -297,6 +300,16 @@ body {
         0 3px 10px rgba(0, 0, 0, 0.5),
         inset 0 1px 0 rgba(255, 255, 255, 0.3);
     background: linear-gradient(145deg, #ee5a6f, #ff6b6b);
+}
+
+/* Target Button - Gold Theme */
+.target-btn {
+    border: 4px solid #d4af37;
+    background: linear-gradient(145deg, #FFD700, #FFA500);
+}
+
+.target-btn:active {
+    background: linear-gradient(145deg, #FFA500, #FFD700);
 }
 
 /* Character Menu Modal */
