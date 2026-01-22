@@ -553,6 +553,37 @@ body {
     background: linear-gradient(145deg, #d32f2f, #f44336);
 }
 
+.warning-btn {
+    background: linear-gradient(145deg, #ff9800, #f57c00);
+    color: white;
+    border-color: #e65100;
+}
+
+.warning-btn:hover {
+    background: linear-gradient(145deg, #f57c00, #ff9800);
+}
+
+.save-info {
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    text-align: center;
+    margin-bottom: 5px;
+}
+
+.save-info-label {
+    color: #888;
+    font-size: 0.9em;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.save-info-value {
+    color: #4CAF50;
+    font-weight: bold;
+    font-size: 0.95em;
+}
+
 @media (max-width: 768px) {
     .save-section {
         margin-top: 10px;
@@ -561,5 +592,9 @@ body {
     .menu-btn {
         padding: 14px 20px;
         font-size: 1.1em;
+    }
+
+    .save-info {
+        padding: 10px 14px;
     }
 }
