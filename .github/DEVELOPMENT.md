@@ -1,9 +1,15 @@
 # Development Roadmap & Architecture
 
+> **Navigation:** [Current State](#current-state) | [Refactoring Strategy](#refactoring-strategy-for-expansion) | [Testing](#testing-strategy) | [Module Loading](#module-loading) | [Features](#current-features-complete-)
+
 ## Current State
-- **Lines of Code:** ~1,200
+- **Lines of Code:** 1,329 (game.js)
+- **File Structure:**
+  - `game.js` - Core game logic (1,329 lines)
+  - `index.html` - HTML structure (120 lines)
+  - `styles.css` - Styling and responsive design
 - **Architecture:** Monolithic single-file JavaScript
-- **Status:** Production-ready for current feature set
+- **Status:** Production-ready, approaching modularization threshold (1,500 lines)
 
 ## Refactoring Strategy for Expansion
 
@@ -166,9 +172,101 @@ class Ability {
 
 - ✅ **Incremental:** Refactor in small steps, test after each
 - ✅ **Working code first:** Keep game functional throughout
-- ✅ **Data-driven:** Prefer JSON over hardcoded values
-- ✅ **Composition > Inheritance:** Use ECS for flexibility
+- ✅ **Data-driven:** Prefer JSON over hardcoded values (when project scales)
+- ✅ **Composition > Inheritance:** Use composition patterns for flexibility
 - ⚠️ **Don't refactor everything at once:** High risk, low value
+- ✅ **Test before refactoring:** Ensure current functionality works before restructuring
+
+## Testing Strategy
+
+### Current Approach (Pre-Modularization)
+At current scale (1,329 lines), manual testing is sufficient:
+- **Playthrough Testing**: Play through all 3 rooms after changes
+- **Feature Testing**: Test specific features (combat, movement, camera, chests, level-up)
+- **Cross-browser Testing**: Test on Chrome, Firefox, Safari (desktop + mobile)
+- **Touch Testing**: Verify joystick, pinch-zoom, pan, double-tap on mobile devices
+
+**Manual Test Checklist:**
+- [ ] Player movement (WASD, arrows, joystick)
+- [ ] Combat (attack key, button, range, damage, cooldown)
+- [ ] Enemy AI (aggro, chase, attack)
+- [ ] Chests (open, rewards: health, XP, gold)
+- [ ] Level progression (XP gain, level up, stat increases)
+- [ ] Camera (zoom, pan, follow mode, double-tap reset)
+- [ ] Room transitions (doors, enemy/chest state persistence)
+- [ ] Death and restart (health = 0, respawn)
+
+### Phase 1-2: Lightweight Testing (1,500-3,000 lines)
+When modularizing, add basic unit tests for critical functions:
+```javascript
+// Example: Test damage calculation
+function testDamageCalculation() {
+    const damage = calculateDamage(10, 5); // attack=10, defense=5
+    console.assert(damage === 7.5, 'Damage calculation failed');
+}
+```
+
+**Recommended Tools:**
+- **No framework initially**: Use `console.assert()` for simple unit tests
+- **Manual E2E testing**: Continue playthrough testing for integration
+- **Test critical refactored modules first**: viewport, collision, combat
+
+### Phase 3-4: Automated Testing (5,000+ lines)
+When complexity increases, introduce proper testing framework:
+
+**Unit Testing:**
+```bash
+npm install --save-dev vitest  # or jest
+```
+```javascript
+// tests/combat.test.js
+import { calculateDamage, checkCollision } from '../src/core/combat.js';
+
+describe('Combat System', () => {
+    it('should calculate damage correctly', () => {
+        expect(calculateDamage(10, 5)).toBe(7.5);
+        expect(calculateDamage(5, 10)).toBe(1); // minimum damage
+    });
+});
+```
+
+**Integration Testing:**
+- Test multi-system interactions (combat + movement + collision)
+- Test state management (room transitions, player progression)
+
+**E2E Testing (Optional for 10,000+ lines):**
+```bash
+npm install --save-dev playwright  # or cypress
+```
+- Automated playthrough testing
+- Visual regression testing
+- Mobile touch interaction testing
+
+### Testing During Refactoring
+**Critical Rule:** Test before and after each refactoring step
+
+1. **Baseline test**: Verify current behavior works
+2. **Refactor**: Make code changes
+3. **Regression test**: Confirm behavior unchanged
+4. **Iterate**: Small steps, frequent testing
+
+**Example Refactoring Workflow:**
+```bash
+# 1. Manual test current viewport behavior
+# 2. Create feature branch: git checkout -b refactor/extract-viewport
+# 3. Extract viewport code to viewport.js
+# 4. Test viewport still works identically
+# 5. Commit changes: git commit -m "Extract viewport to separate module"
+# 6. Push and create PR for review
+# 7. Move to next module
+```
+
+**Git Best Practices During Refactoring:**
+- Create feature branches for each refactoring phase
+- Commit after each successful extraction/migration
+- Use descriptive commit messages: `refactor: extract Player class to separate module`
+- Keep refactoring commits separate from feature/bug fix commits
+- Test before pushing to ensure working state
 
 ## Module Loading
 
