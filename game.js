@@ -374,6 +374,9 @@ class Player {
         showMessage(`LEVEL UP! Now level ${this.level}!`);
         createParticles(this.x + this.width / 2, this.y + this.height / 2, '#ffd700', 20);
         updateUI();
+
+        // Auto-save on level up
+        SaveManager.save(this, gameState);
     }
 
     die() {
@@ -395,7 +398,11 @@ class Player {
         this.defense = 5;
         gameState.enemiesDefeated = 0;
         gameState.chestsOpened = 0;
-        loadRoom(0);
+        loadRoom(0, true); // Skip save on death/reset
+
+        // Delete save on death (start fresh)
+        SaveManager.deleteSave();
+
         updateUI();
     }
 
@@ -692,7 +699,7 @@ function updateZoomIndicator() {
     }
 }
 
-function loadRoom(roomIndex) {
+function loadRoom(roomIndex, skipSave = false) {
     gameState.currentRoom = roomIndex;
     const room = roomTemplates[roomIndex];
 
@@ -735,6 +742,11 @@ function loadRoom(roomIndex) {
     }
 
     showMessage(`Entered room ${roomIndex + 1}`);
+
+    // Auto-save on room change (but not on initial load)
+    if (!skipSave) {
+        SaveManager.save(player, gameState);
+    }
 }
 
 function drawWalls() {
@@ -774,13 +786,179 @@ function drawChests() {
     }
 }
 
+// Save Manager - Simple localStorage-based save system
+const SaveManager = {
+    SAVE_KEY: 'dungeon-crawler-save',
+
+    // Check if localStorage is available
+    isAvailable() {
+        try {
+            const testKey = '__storage_test__';
+            localStorage.setItem(testKey, 'test');
+            localStorage.removeItem(testKey);
+            return true;
+        } catch (e) {
+            console.warn('localStorage not available:', e);
+            return false;
+        }
+    },
+
+    // Save game state
+    save(player, gameState) {
+        if (!this.isAvailable()) {
+            console.error('Cannot save: localStorage not available');
+            return false;
+        }
+
+        try {
+            const saveData = {
+                v: '1.0',  // Version
+                t: Date.now(),  // Timestamp
+                p: {  // Player
+                    x: player.x,
+                    y: player.y,
+                    lvl: player.level,
+                    xp: player.xp,
+                    xpn: player.xpNeeded,
+                    hp: player.health,
+                    mhp: player.maxHealth,
+                    atk: player.attack,
+                    def: player.defense
+                },
+                r: gameState.currentRoom,  // Current room
+                ed: gameState.enemiesDefeated,  // Enemies defeated total
+                gt: Math.floor(gameState.gameTime / 60)  // Game time in seconds
+            };
+
+            localStorage.setItem(this.SAVE_KEY, JSON.stringify(saveData));
+            this.showSaveIndicator();
+            return true;
+        } catch (e) {
+            console.error('Save failed:', e);
+            return false;
+        }
+    },
+
+    // Load game state
+    load() {
+        if (!this.isAvailable()) {
+            return null;
+        }
+
+        try {
+            const json = localStorage.getItem(this.SAVE_KEY);
+            if (!json) {
+                return null;  // No save exists
+            }
+
+            const data = JSON.parse(json);
+
+            // Basic validation
+            if (!data.v || !data.p || typeof data.p.lvl !== 'number' || data.p.lvl < 1) {
+                console.error('Invalid save data');
+                return null;
+            }
+
+            return data;
+        } catch (e) {
+            console.error('Load failed:', e);
+            return null;
+        }
+    },
+
+    // Apply loaded save data to game
+    applySave(saveData, player, gameState) {
+        if (!saveData) return false;
+
+        try {
+            // Restore player stats
+            player.x = saveData.p.x;
+            player.y = saveData.p.y;
+            player.level = saveData.p.lvl;
+            player.xp = saveData.p.xp;
+            player.xpNeeded = saveData.p.xpn;
+            player.health = saveData.p.hp;
+            player.maxHealth = saveData.p.mhp;
+            player.attack = saveData.p.atk;
+            player.defense = saveData.p.def;
+
+            // Reset temporary combat state
+            player.attackCooldown = 0;
+            player.invulnerable = false;
+            player.invulnerableTimer = 0;
+            player.isAttacking = false;
+
+            // Restore game state
+            gameState.enemiesDefeated = saveData.ed || 0;
+            gameState.gameTime = (saveData.gt || 0) * 60;  // Convert back to frames
+
+            // Load the saved room (with bounds checking)
+            const roomIndex = Math.min(Math.max(0, saveData.r || 0), roomTemplates.length - 1);
+            loadRoom(roomIndex);
+
+            return true;
+        } catch (e) {
+            console.error('Failed to apply save:', e);
+            return false;
+        }
+    },
+
+    // Delete save
+    deleteSave() {
+        if (!this.isAvailable()) return false;
+
+        try {
+            localStorage.removeItem(this.SAVE_KEY);
+            return true;
+        } catch (e) {
+            console.error('Delete save failed:', e);
+            return false;
+        }
+    },
+
+    // Check if save exists
+    hasSave() {
+        if (!this.isAvailable()) return false;
+        return localStorage.getItem(this.SAVE_KEY) !== null;
+    },
+
+    // Show save indicator
+    showSaveIndicator() {
+        const indicator = document.getElementById('save-indicator');
+        if (indicator) {
+            indicator.classList.add('visible');
+            setTimeout(() => {
+                indicator.classList.remove('visible');
+            }, 2000);
+        }
+    }
+};
+
 // Initialize game
 const player = new Player(3 * TILE_SIZE, 3 * TILE_SIZE);
-loadRoom(0);
+
+// Try to load save, otherwise start new game
+const saveData = SaveManager.load();
+if (saveData) {
+    // Load from save
+    SaveManager.applySave(saveData, player, gameState);
+} else {
+    // Start new game
+    loadRoom(0, true);  // skipSave = true on initial load
+}
 
 // Keyboard input
 window.addEventListener('keydown', (e) => {
     gameState.keys[e.key] = true;
+
+    // Manual save shortcut (Ctrl+S or Cmd+S)
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault(); // Prevent browser save dialog
+        const success = SaveManager.save(player, gameState);
+        if (success) {
+            showMessage('Game saved!');
+        }
+    }
 });
 
 window.addEventListener('keyup', (e) => {
@@ -968,6 +1146,34 @@ function setupCharacterMenu() {
             closeMenu();
         }
     });
+
+    // Save game button
+    const saveBtn = document.getElementById('btn-save-game');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            const success = SaveManager.save(player, gameState);
+            if (success) {
+                showMessage('Game saved successfully!');
+            } else {
+                showMessage('Failed to save game');
+            }
+        });
+    }
+
+    // Delete save button
+    const deleteBtn = document.getElementById('btn-delete-save');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', () => {
+            if (confirm('Delete your saved game? This cannot be undone!')) {
+                const success = SaveManager.deleteSave();
+                if (success) {
+                    showMessage('Save deleted. Please refresh to start a new game.');
+                } else {
+                    showMessage('Failed to delete save');
+                }
+            }
+        });
+    }
 }
 
 // Camera Follow System
