@@ -38,26 +38,30 @@ Extract to separate files:
 
 ### Phase 2: Architecture Patterns (3,000+ lines)
 
-**Entity Component System (ECS):**
+**Simple Composition (Recommended):**
 ```javascript
-// Instead of deep inheritance
-class Entity {
-    constructor() {
-        this.components = new Map();
+// Composition without ECS overhead
+class Enemy {
+    constructor(config) {
+        this.stats = { ...config.stats };
+        this.ai = AIFactory.create(config.aiType);
+        this.combat = new Combat(config.attack, config.defense);
     }
-    addComponent(component) { /* ... */ }
 }
 
-// Components
-class HealthComponent { constructor(max) { /* ... */ } }
-class MovementComponent { constructor(speed) { /* ... */ } }
-class CombatComponent { constructor(attack, defense) { /* ... */ } }
-
-// Systems process entities with specific components
-class MovementSystem {
-    update(entities) { /* ... */ }
+// AI Factory
+class AIFactory {
+    static create(type) {
+        switch(type) {
+            case 'melee': return new MeleeAI();
+            case 'ranged': return new RangedAI();
+            default: return new BasicAI();
+        }
+    }
 }
 ```
+
+*Note: Full Entity Component System (ECS) only needed if you have 100+ entities and performance issues. Current approach scales fine to 20,000+ lines.*
 
 **Class System:**
 ```javascript
@@ -99,6 +103,8 @@ Move configuration to JSON:
   - items.json          (Item database)
   - classes.json        (Class configurations)
 ```
+
+*Note: JSON holds configuration data only (stats, IDs, values). Behavior/functions stay in JavaScript classes.*
 
 **Example:**
 ```json
@@ -164,9 +170,21 @@ class Ability {
 - ✅ **Composition > Inheritance:** Use ECS for flexibility
 - ⚠️ **Don't refactor everything at once:** High risk, low value
 
-## Build System (Optional, 10,000+ lines)
+## Module Loading
 
-When modules become complex:
+**Phase 1-3: Native ES6 Modules (No build system needed)**
+```html
+<script type="module" src="/src/core/game.js"></script>
+```
+```javascript
+// In game.js
+import { Player } from './entities/Player.js';
+import { viewport } from './systems/viewport.js';
+```
+
+**Phase 4: Build System (Optional, 10,000+ lines)**
+
+Only add bundler when you need optimization:
 ```json
 {
     "scripts": {
