@@ -1001,17 +1001,27 @@ function clampPanOffset() {
 
     if (viewport.scale > 1) {
         // Zoomed in: World is larger than viewport
-        // Clamp to keep edges within view (standard panning bounds)
+        // Clamp to keep world edges within view (prevent panning too far)
         const minOffsetX = -(scaledWidth - CANVAS_WIDTH);
         const minOffsetY = -(scaledHeight - CANVAS_HEIGHT);
 
         viewport.offsetX = Math.max(minOffsetX, Math.min(0, viewport.offsetX));
         viewport.offsetY = Math.max(minOffsetY, Math.min(0, viewport.offsetY));
     } else {
-        // At 1x or zoomed out: World fits entirely in viewport or is smaller
-        // Center the world in the viewport to prevent showing empty space
-        viewport.offsetX = (CANVAS_WIDTH - scaledWidth) / 2;
-        viewport.offsetY = (CANVAS_HEIGHT - scaledHeight) / 2;
+        // At 1x or zoomed out: World fits in viewport, but allow limited offset
+        // for camera follow while preventing too much empty space
+        const margin = 0.35; // Allow up to 35% empty space for camera follow
+        const maxEmptySpace = margin * CANVAS_WIDTH;
+        const maxEmptySpaceY = margin * CANVAS_HEIGHT;
+
+        // Offset can range to show some empty space but keep most of world visible
+        const maxOffsetX = maxEmptySpace;
+        const minOffsetX = -(scaledWidth - CANVAS_WIDTH) - maxEmptySpace;
+        const maxOffsetY = maxEmptySpaceY;
+        const minOffsetY = -(scaledHeight - CANVAS_HEIGHT) - maxEmptySpaceY;
+
+        viewport.offsetX = Math.max(minOffsetX, Math.min(maxOffsetX, viewport.offsetX));
+        viewport.offsetY = Math.max(minOffsetY, Math.min(maxOffsetY, viewport.offsetY));
     }
 }
 
