@@ -1002,8 +1002,19 @@ const SaveManager = {
      * @returns {string} Formatted time string
      */
     formatTimeAgo(timestamp) {
+        // Handle invalid timestamps
+        if (!timestamp || typeof timestamp !== 'number' || timestamp < 0) {
+            return 'Never';
+        }
+
         const now = Date.now();
         const diff = now - timestamp;
+
+        // Handle future dates (clock skew or corrupted data)
+        if (diff < 0) {
+            return 'just now';
+        }
+
         const seconds = Math.floor(diff / 1000);
         const minutes = Math.floor(seconds / 60);
         const hours = Math.floor(minutes / 60);
@@ -1233,24 +1244,18 @@ function setupCharacterMenu() {
 
     function openMenu() {
         charMenu.classList.remove('hidden');
+        charMenu.setAttribute('aria-hidden', 'false');
         updateUI(); // Refresh stats when opening
     }
 
     function closeMenu() {
         charMenu.classList.add('hidden');
+        charMenu.setAttribute('aria-hidden', 'true');
     }
 
+    // Click events work on both desktop and touch devices
     charMenuBtn.addEventListener('click', openMenu);
-    charMenuBtn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        openMenu();
-    });
-
     charMenuClose.addEventListener('click', closeMenu);
-    charMenuClose.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        closeMenu();
-    });
 
     // Close when clicking outside
     charMenu.addEventListener('click', (e) => {
@@ -1258,6 +1263,9 @@ function setupCharacterMenu() {
             closeMenu();
         }
     });
+
+    // Return close function for keyboard handler
+    return { closeMenu, isOpen: () => !charMenu.classList.contains('hidden') };
 }
 
 // Save/Load Menu Toggle
@@ -1271,26 +1279,36 @@ function setupSaveMenu() {
         return;
     }
 
+    // Debounce state for save button
+    let saveDebounceTimer = null;
+    const SAVE_DEBOUNCE_MS = 1000;
+
+    function clearSaveDebounce() {
+        if (saveDebounceTimer) {
+            clearTimeout(saveDebounceTimer);
+            saveDebounceTimer = null;
+            const saveBtn = document.getElementById('btn-save-game');
+            if (saveBtn) {
+                saveBtn.disabled = false;
+            }
+        }
+    }
+
     function openMenu() {
         saveMenu.classList.remove('hidden');
+        saveMenu.setAttribute('aria-hidden', 'false');
         updateSaveMenuInfo(); // Refresh save info when opening
     }
 
     function closeMenu() {
         saveMenu.classList.add('hidden');
+        saveMenu.setAttribute('aria-hidden', 'true');
+        clearSaveDebounce(); // Clear any active debounce timer
     }
 
+    // Click events work on both desktop and touch devices
     saveMenuBtn.addEventListener('click', openMenu);
-    saveMenuBtn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        openMenu();
-    });
-
     saveMenuClose.addEventListener('click', closeMenu);
-    saveMenuClose.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        closeMenu();
-    });
 
     // Close when clicking outside
     saveMenu.addEventListener('click', (e) => {
@@ -1299,14 +1317,26 @@ function setupSaveMenu() {
         }
     });
 
-    // Save game button
+    // Save game button with debouncing
     const saveBtn = document.getElementById('btn-save-game');
     if (saveBtn) {
         saveBtn.addEventListener('click', () => {
+            // Prevent rapid clicks
+            if (saveDebounceTimer) {
+                return;
+            }
+
             const success = SaveManager.save(player, gameState);
             if (success) {
                 showMessage('Game saved successfully!');
                 updateSaveMenuInfo(); // Update save info immediately
+
+                // Debounce for 1 second
+                saveBtn.disabled = true;
+                saveDebounceTimer = setTimeout(() => {
+                    saveBtn.disabled = false;
+                    saveDebounceTimer = null;
+                }, SAVE_DEBOUNCE_MS);
             } else {
                 showMessage('Failed to save game');
             }
@@ -1370,57 +1400,85 @@ function setupSaveMenu() {
             }
         });
     }
+
+    // Return close function for keyboard handler
+    return { closeMenu, isOpen: () => !saveMenu.classList.contains('hidden') };
 }
 
-// Update save menu info display
-function updateSaveMenuInfo() {
-    const lastSavedElement = document.getElementById('save-last-saved');
-    const levelElement = document.getElementById('save-level');
-    const roomElement = document.getElementById('save-room');
-    const enemiesElement = document.getElementById('save-enemies');
-    const loadBtn = document.getElementById('btn-load-game');
-    const deleteBtn = document.getElementById('btn-delete-save');
+// Update save menu info display (cached DOM queries for performance)
+const updateSaveMenuInfo = (() => {
+    // Cache DOM elements on first call
+    let cachedElements = null;
 
-    const metadata = SaveManager.getSaveMetadata();
-
-    if (metadata && metadata.timestamp) {
-        // Save exists - display info
-        if (lastSavedElement) {
-            lastSavedElement.textContent = SaveManager.formatTimeAgo(metadata.timestamp);
+    function getCachedElements() {
+        if (!cachedElements) {
+            cachedElements = {
+                lastSaved: document.getElementById('save-last-saved'),
+                level: document.getElementById('save-level'),
+                room: document.getElementById('save-room'),
+                enemies: document.getElementById('save-enemies'),
+                loadBtn: document.getElementById('btn-load-game'),
+                deleteBtn: document.getElementById('btn-delete-save')
+            };
         }
-        if (levelElement) {
-            levelElement.textContent = metadata.level || '-';
-        }
-        if (roomElement) {
-            roomElement.textContent = (metadata.room !== undefined ? metadata.room + 1 : '-');
-        }
-        if (enemiesElement) {
-            enemiesElement.textContent = metadata.enemiesDefeated || '-';
-        }
-
-        // Enable load and delete buttons
-        if (loadBtn) loadBtn.disabled = false;
-        if (deleteBtn) deleteBtn.disabled = false;
-    } else {
-        // No save exists - display default
-        if (lastSavedElement) {
-            lastSavedElement.textContent = 'Never';
-        }
-        if (levelElement) {
-            levelElement.textContent = '-';
-        }
-        if (roomElement) {
-            roomElement.textContent = '-';
-        }
-        if (enemiesElement) {
-            enemiesElement.textContent = '-';
-        }
-
-        // Disable load and delete buttons
-        if (loadBtn) loadBtn.disabled = true;
-        if (deleteBtn) deleteBtn.disabled = true;
+        return cachedElements;
     }
-}
+
+    return function() {
+        const elements = getCachedElements();
+        const metadata = SaveManager.getSaveMetadata();
+
+        if (metadata && metadata.timestamp) {
+            // Save exists - display info
+            if (elements.lastSaved) {
+                elements.lastSaved.textContent = SaveManager.formatTimeAgo(metadata.timestamp);
+            }
+            if (elements.level) {
+                elements.level.textContent = metadata.level || '-';
+            }
+            if (elements.room) {
+                elements.room.textContent = (metadata.room !== undefined ? metadata.room + 1 : '-');
+            }
+            if (elements.enemies) {
+                elements.enemies.textContent = metadata.enemiesDefeated || '-';
+            }
+
+            // Enable load and delete buttons
+            if (elements.loadBtn) {
+                elements.loadBtn.disabled = false;
+                elements.loadBtn.setAttribute('aria-disabled', 'false');
+            }
+            if (elements.deleteBtn) {
+                elements.deleteBtn.disabled = false;
+                elements.deleteBtn.setAttribute('aria-disabled', 'false');
+            }
+        } else {
+            // No save exists - display default
+            if (elements.lastSaved) {
+                elements.lastSaved.textContent = 'Never';
+            }
+            if (elements.level) {
+                elements.level.textContent = '-';
+            }
+            if (elements.room) {
+                elements.room.textContent = '-';
+            }
+            if (elements.enemies) {
+                elements.enemies.textContent = '-';
+            }
+
+            // Disable load and delete buttons
+            if (elements.loadBtn) {
+                elements.loadBtn.disabled = true;
+                elements.loadBtn.setAttribute('aria-disabled', 'true');
+            }
+            if (elements.deleteBtn) {
+                elements.deleteBtn.disabled = true;
+                elements.deleteBtn.setAttribute('aria-disabled', 'true');
+            }
+        }
+    };
+})();
 
 // Camera Follow System
 function updateCameraFollow() {
@@ -1699,9 +1757,21 @@ function setupViewportControls() {
 // Initialize game
 function initGame() {
     setupVirtualJoystick();
-    setupCharacterMenu();
-    setupSaveMenu();
+    const charMenuHandler = setupCharacterMenu();
+    const saveMenuHandler = setupSaveMenu();
     setupViewportControls();
+
+    // Unified keyboard handler for ESC key (closes any open menu)
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (charMenuHandler && charMenuHandler.isOpen()) {
+                charMenuHandler.closeMenu();
+            } else if (saveMenuHandler && saveMenuHandler.isOpen()) {
+                saveMenuHandler.closeMenu();
+            }
+        }
+    });
+
     updateUI();
     showMessage('Welcome to the dungeon! Explore and defeat enemies!');
     gameLoop();
