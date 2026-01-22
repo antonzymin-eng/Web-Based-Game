@@ -650,18 +650,6 @@ function updateUI() {
 
     const xpPercent = (player.xp / player.xpNeeded) * 100;
     document.getElementById('xp-bar').style.width = xpPercent + '%';
-
-    // Update save timestamp (only if menu is visible to avoid unnecessary localStorage reads)
-    const charMenu = document.getElementById('char-menu');
-    const lastSavedElement = document.getElementById('last-saved-time');
-    if (lastSavedElement && charMenu && !charMenu.classList.contains('hidden')) {
-        const metadata = SaveManager.getSaveMetadata();
-        if (metadata && metadata.timestamp) {
-            lastSavedElement.textContent = SaveManager.formatTimeAgo(metadata.timestamp);
-        } else {
-            lastSavedElement.textContent = 'Never';
-        }
-    }
 }
 
 function updateZoomIndicator() {
@@ -1014,8 +1002,19 @@ const SaveManager = {
      * @returns {string} Formatted time string
      */
     formatTimeAgo(timestamp) {
+        // Handle invalid timestamps
+        if (!timestamp || typeof timestamp !== 'number' || timestamp < 0) {
+            return 'Never';
+        }
+
         const now = Date.now();
         const diff = now - timestamp;
+
+        // Handle future dates (clock skew or corrupted data)
+        if (diff < 0) {
+            return 'just now';
+        }
+
         const seconds = Math.floor(diff / 1000);
         const minutes = Math.floor(seconds / 60);
         const hours = Math.floor(minutes / 60);
@@ -1025,6 +1024,36 @@ const SaveManager = {
         if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
         if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
         return `${days} day${days !== 1 ? 's' : ''} ago`;
+    },
+
+    /**
+     * Manually load saved game (user-initiated)
+     * @param {Player} player - The player object to restore
+     * @param {Object} gameState - The game state object to restore
+     * @returns {boolean} True if load succeeded, false otherwise
+     */
+    loadGame(player, gameState) {
+        if (!this.hasSave()) {
+            console.warn('No save file to load');
+            return false;
+        }
+
+        try {
+            const saveData = this.load();
+            if (!saveData) {
+                return false;
+            }
+
+            const success = this.applySave(saveData, player, gameState);
+            if (success) {
+                updateUI();
+                showMessage('Game loaded successfully!');
+            }
+            return success;
+        } catch (e) {
+            console.error('Failed to load game:', e);
+            return false;
+        }
     }
 };
 
@@ -1215,24 +1244,18 @@ function setupCharacterMenu() {
 
     function openMenu() {
         charMenu.classList.remove('hidden');
+        charMenu.setAttribute('aria-hidden', 'false');
         updateUI(); // Refresh stats when opening
     }
 
     function closeMenu() {
         charMenu.classList.add('hidden');
+        charMenu.setAttribute('aria-hidden', 'true');
     }
 
+    // Click events work on both desktop and touch devices
     charMenuBtn.addEventListener('click', openMenu);
-    charMenuBtn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        openMenu();
-    });
-
     charMenuClose.addEventListener('click', closeMenu);
-    charMenuClose.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        closeMenu();
-    });
 
     // Close when clicking outside
     charMenu.addEventListener('click', (e) => {
@@ -1241,16 +1264,101 @@ function setupCharacterMenu() {
         }
     });
 
-    // Save game button
+    // Return close function for keyboard handler
+    return { closeMenu, isOpen: () => !charMenu.classList.contains('hidden') };
+}
+
+// Save/Load Menu Toggle
+function setupSaveMenu() {
+    const saveMenu = document.getElementById('save-menu');
+    const saveMenuBtn = document.getElementById('save-menu-btn');
+    const saveMenuClose = document.getElementById('save-menu-close');
+
+    if (!saveMenu || !saveMenuBtn || !saveMenuClose) {
+        console.error('Save menu elements not found!');
+        return;
+    }
+
+    // Debounce state for save button
+    let saveDebounceTimer = null;
+    const SAVE_DEBOUNCE_MS = 1000;
+
+    function clearSaveDebounce() {
+        if (saveDebounceTimer) {
+            clearTimeout(saveDebounceTimer);
+            saveDebounceTimer = null;
+            const saveBtn = document.getElementById('btn-save-game');
+            if (saveBtn) {
+                saveBtn.disabled = false;
+            }
+        }
+    }
+
+    function openMenu() {
+        saveMenu.classList.remove('hidden');
+        saveMenu.setAttribute('aria-hidden', 'false');
+        updateSaveMenuInfo(); // Refresh save info when opening
+    }
+
+    function closeMenu() {
+        saveMenu.classList.add('hidden');
+        saveMenu.setAttribute('aria-hidden', 'true');
+        clearSaveDebounce(); // Clear any active debounce timer
+    }
+
+    // Click events work on both desktop and touch devices
+    saveMenuBtn.addEventListener('click', openMenu);
+    saveMenuClose.addEventListener('click', closeMenu);
+
+    // Close when clicking outside
+    saveMenu.addEventListener('click', (e) => {
+        if (e.target === saveMenu) {
+            closeMenu();
+        }
+    });
+
+    // Save game button with debouncing
     const saveBtn = document.getElementById('btn-save-game');
     if (saveBtn) {
         saveBtn.addEventListener('click', () => {
+            // Prevent rapid clicks
+            if (saveDebounceTimer) {
+                return;
+            }
+
             const success = SaveManager.save(player, gameState);
             if (success) {
                 showMessage('Game saved successfully!');
-                updateUI(); // Update timestamp immediately
+                updateSaveMenuInfo(); // Update save info immediately
+
+                // Debounce for 1 second
+                saveBtn.disabled = true;
+                saveDebounceTimer = setTimeout(() => {
+                    saveBtn.disabled = false;
+                    saveDebounceTimer = null;
+                }, SAVE_DEBOUNCE_MS);
             } else {
                 showMessage('Failed to save game');
+            }
+        });
+    }
+
+    // Load game button
+    const loadBtn = document.getElementById('btn-load-game');
+    if (loadBtn) {
+        loadBtn.addEventListener('click', () => {
+            if (!SaveManager.hasSave()) {
+                showMessage('No save file to load!');
+                return;
+            }
+
+            if (confirm('Load saved game? Current unsaved progress will be lost!')) {
+                const success = SaveManager.loadGame(player, gameState);
+                if (success) {
+                    closeMenu();
+                } else {
+                    showMessage('Failed to load game');
+                }
             }
         });
     }
@@ -1267,6 +1375,7 @@ function setupCharacterMenu() {
                 closeMenu();
 
                 showMessage('New game started!');
+                updateSaveMenuInfo();
             }
         });
     }
@@ -1275,18 +1384,101 @@ function setupCharacterMenu() {
     const deleteBtn = document.getElementById('btn-delete-save');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', () => {
+            if (!SaveManager.hasSave()) {
+                showMessage('No save file to delete!');
+                return;
+            }
+
             if (confirm('Delete your saved game? This cannot be undone!')) {
                 const success = SaveManager.deleteSave();
                 if (success) {
-                    showMessage('Save deleted. Refresh page to start fresh.');
-                    updateUI(); // Update timestamp display
+                    showMessage('Save deleted successfully!');
+                    updateSaveMenuInfo(); // Update display
                 } else {
                     showMessage('Failed to delete save');
                 }
             }
         });
     }
+
+    // Return close function for keyboard handler
+    return { closeMenu, isOpen: () => !saveMenu.classList.contains('hidden') };
 }
+
+// Update save menu info display (cached DOM queries for performance)
+const updateSaveMenuInfo = (() => {
+    // Cache DOM elements on first call
+    let cachedElements = null;
+
+    function getCachedElements() {
+        if (!cachedElements) {
+            cachedElements = {
+                lastSaved: document.getElementById('save-last-saved'),
+                level: document.getElementById('save-level'),
+                room: document.getElementById('save-room'),
+                enemies: document.getElementById('save-enemies'),
+                loadBtn: document.getElementById('btn-load-game'),
+                deleteBtn: document.getElementById('btn-delete-save')
+            };
+        }
+        return cachedElements;
+    }
+
+    return function() {
+        const elements = getCachedElements();
+        const metadata = SaveManager.getSaveMetadata();
+
+        if (metadata && metadata.timestamp) {
+            // Save exists - display info
+            if (elements.lastSaved) {
+                elements.lastSaved.textContent = SaveManager.formatTimeAgo(metadata.timestamp);
+            }
+            if (elements.level) {
+                elements.level.textContent = metadata.level || '-';
+            }
+            if (elements.room) {
+                elements.room.textContent = (metadata.room !== undefined ? metadata.room + 1 : '-');
+            }
+            if (elements.enemies) {
+                elements.enemies.textContent = metadata.enemiesDefeated || '-';
+            }
+
+            // Enable load and delete buttons
+            if (elements.loadBtn) {
+                elements.loadBtn.disabled = false;
+                elements.loadBtn.setAttribute('aria-disabled', 'false');
+            }
+            if (elements.deleteBtn) {
+                elements.deleteBtn.disabled = false;
+                elements.deleteBtn.setAttribute('aria-disabled', 'false');
+            }
+        } else {
+            // No save exists - display default
+            if (elements.lastSaved) {
+                elements.lastSaved.textContent = 'Never';
+            }
+            if (elements.level) {
+                elements.level.textContent = '-';
+            }
+            if (elements.room) {
+                elements.room.textContent = '-';
+            }
+            if (elements.enemies) {
+                elements.enemies.textContent = '-';
+            }
+
+            // Disable load and delete buttons
+            if (elements.loadBtn) {
+                elements.loadBtn.disabled = true;
+                elements.loadBtn.setAttribute('aria-disabled', 'true');
+            }
+            if (elements.deleteBtn) {
+                elements.deleteBtn.disabled = true;
+                elements.deleteBtn.setAttribute('aria-disabled', 'true');
+            }
+        }
+    };
+})();
 
 // Camera Follow System
 function updateCameraFollow() {
@@ -1565,8 +1757,21 @@ function setupViewportControls() {
 // Initialize game
 function initGame() {
     setupVirtualJoystick();
-    setupCharacterMenu();
+    const charMenuHandler = setupCharacterMenu();
+    const saveMenuHandler = setupSaveMenu();
     setupViewportControls();
+
+    // Unified keyboard handler for ESC key (closes any open menu)
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (charMenuHandler && charMenuHandler.isOpen()) {
+                charMenuHandler.closeMenu();
+            } else if (saveMenuHandler && saveMenuHandler.isOpen()) {
+                saveMenuHandler.closeMenu();
+            }
+        }
+    });
+
     updateUI();
     showMessage('Welcome to the dungeon! Explore and defeat enemies!');
     gameLoop();
