@@ -49,6 +49,128 @@ const MAGIC_CONSTANTS = {
     PARTICLE_POOL_SIZE: 300 // Max active particles
 }
 
+// Ability Definitions (Phase 2)
+const ABILITIES = {
+    magic_missile: {
+        id: 'magic_missile',
+        name: 'Magic Missile',
+        icon: '✨',
+        description: 'Fire a magical projectile at your target',
+        manaCost: 10,
+        cooldown: 1500,
+        targetingMode: MAGIC_CONSTANTS.TARGETING_MODES.ENEMY_TARGET,
+        range: 250,
+        damage: 15,
+        color: '#9c27b0',
+        unlockLevel: 1
+    },
+
+    fireball: {
+        id: 'fireball',
+        name: 'Fireball',
+        icon: '🔥',
+        description: 'Hurl a fireball that explodes in an area',
+        manaCost: 25,
+        cooldown: 3000,
+        targetingMode: MAGIC_CONSTANTS.TARGETING_MODES.CIRCLE_AOE,
+        range: 300,
+        radius: 60,
+        damage: 30,
+        color: '#ff6600',
+        unlockLevel: 2
+    },
+
+    frost_nova: {
+        id: 'frost_nova',
+        name: 'Frost Nova',
+        icon: '❄️',
+        description: 'Freeze enemies around you',
+        manaCost: 30,
+        cooldown: 4000,
+        targetingMode: MAGIC_CONSTANTS.TARGETING_MODES.INSTANT_SELF,
+        range: 0,
+        radius: 100,
+        damage: 20,
+        slow: 0.5,           // 50% slow
+        slowDuration: 2000,  // 2 seconds
+        color: '#00bfff',
+        unlockLevel: 3
+    },
+
+    lightning_bolt: {
+        id: 'lightning_bolt',
+        name: 'Lightning Bolt',
+        icon: '⚡',
+        description: 'Strike in a line from your position',
+        manaCost: 20,
+        cooldown: 2500,
+        targetingMode: MAGIC_CONSTANTS.TARGETING_MODES.LINE,
+        range: 250,
+        width: 30,
+        damage: 35,
+        color: '#ffeb3b',
+        unlockLevel: 4
+    },
+
+    arcane_blast: {
+        id: 'arcane_blast',
+        name: 'Arcane Blast',
+        icon: '💫',
+        description: 'Powerful single-target spell',
+        manaCost: 35,
+        cooldown: 4500,
+        targetingMode: MAGIC_CONSTANTS.TARGETING_MODES.ENEMY_TARGET,
+        range: 200,
+        damage: 50,
+        color: '#b388ff',
+        unlockLevel: 5
+    },
+
+    flame_strike: {
+        id: 'flame_strike',
+        name: 'Flame Strike',
+        icon: '💥',
+        description: 'Call down flames in a line',
+        manaCost: 40,
+        cooldown: 5000,
+        targetingMode: MAGIC_CONSTANTS.TARGETING_MODES.LINE_GROUND,
+        range: 400,
+        width: 60,
+        length: 200,
+        damage: 45,
+        color: '#ff3d00',
+        unlockLevel: 6
+    },
+
+    flame_breath: {
+        id: 'flame_breath',
+        name: 'Flame Breath',
+        icon: '🔥',
+        description: 'Breathe fire in a cone',
+        manaCost: 35,
+        cooldown: 5000,
+        targetingMode: MAGIC_CONSTANTS.TARGETING_MODES.CONE,
+        range: 180,
+        angle: 60,  // 60-degree cone
+        damage: 40,
+        color: '#ff4500',
+        unlockLevel: 7
+    },
+
+    healing_light: {
+        id: 'healing_light',
+        name: 'Healing Light',
+        icon: '💚',
+        description: 'Restore health instantly',
+        manaCost: 35,
+        cooldown: 8000,
+        targetingMode: MAGIC_CONSTANTS.TARGETING_MODES.INSTANT_SELF,
+        healing: 60,
+        color: '#4caf50',
+        unlockLevel: 3
+    }
+}
+
 // ============================================================================
 // SECTION 2: CANVAS & RENDERING SETUP
 // ============================================================================
@@ -190,9 +312,269 @@ const roomTemplates = [
     }
 ];
 
-// Player Class
 // ============================================================================
-// SECTION 4: ENTITY CLASSES
+// SECTION 4: MAGIC SYSTEM (Phase 2)
+// ============================================================================
+
+/**
+ * MagicManager - Handles spell casting, cooldowns, and targeting
+ * Phase 2: Core spell system architecture
+ */
+const MagicManager = {
+    // State management
+    state: {
+        globalCooldown: 0,          // Global cooldown remaining (ms)
+        spellCooldowns: {},          // Individual spell cooldowns {spellId: remainingMs}
+        targetingActive: false,      // Is player currently in targeting mode
+        activeAbility: null,         // Currently targeting ability ID
+        targetingMode: null,         // Current targeting mode
+        targetX: 0,                  // Target position X (world space)
+        targetY: 0,                  // Target position Y (world space)
+        targetAngle: 0               // Target angle for cone/line spells
+    },
+
+    /**
+     * Initialize the magic system
+     */
+    init() {
+        // Initialize cooldowns for all abilities
+        Object.keys(ABILITIES).forEach(abilityId => {
+            this.state.spellCooldowns[abilityId] = 0;
+        });
+    },
+
+    /**
+     * Update cooldowns each frame
+     * @param {number} deltaTime - Time since last frame in milliseconds
+     */
+    update(deltaTime) {
+        // Update global cooldown
+        if (this.state.globalCooldown > 0) {
+            this.state.globalCooldown = Math.max(0, this.state.globalCooldown - deltaTime);
+        }
+
+        // Update individual spell cooldowns
+        Object.keys(this.state.spellCooldowns).forEach(abilityId => {
+            if (this.state.spellCooldowns[abilityId] > 0) {
+                this.state.spellCooldowns[abilityId] = Math.max(0, this.state.spellCooldowns[abilityId] - deltaTime);
+            }
+        });
+    },
+
+    /**
+     * Check if a spell can be cast
+     * @param {string} abilityId - The ability to check
+     * @returns {object} {canCast: boolean, reason: string}
+     */
+    canCast(abilityId) {
+        const ability = ABILITIES[abilityId];
+        if (!ability) {
+            return { canCast: false, reason: 'Ability not found' };
+        }
+
+        // Check if spell is unlocked
+        if (!player.unlockedSpells.includes(abilityId)) {
+            return { canCast: false, reason: 'Spell not unlocked' };
+        }
+
+        // Check mana cost
+        if (player.mana < ability.manaCost) {
+            return { canCast: false, reason: 'Not enough mana' };
+        }
+
+        // Check global cooldown
+        if (this.state.globalCooldown > 0) {
+            return { canCast: false, reason: 'Global cooldown' };
+        }
+
+        // Check spell cooldown
+        if (this.state.spellCooldowns[abilityId] > 0) {
+            const remaining = (this.state.spellCooldowns[abilityId] / 1000).toFixed(1);
+            return { canCast: false, reason: `Cooldown (${remaining}s)` };
+        }
+
+        return { canCast: true, reason: '' };
+    },
+
+    /**
+     * Begin casting a spell
+     * @param {string} abilityId - The ability to cast
+     */
+    beginCast(abilityId) {
+        const check = this.canCast(abilityId);
+        if (!check.canCast) {
+            showMessage(check.reason);
+            return;
+        }
+
+        const ability = ABILITIES[abilityId];
+
+        // Handle instant cast spells
+        if (ability.targetingMode === MAGIC_CONSTANTS.TARGETING_MODES.INSTANT ||
+            ability.targetingMode === MAGIC_CONSTANTS.TARGETING_MODES.INSTANT_SELF) {
+            this.executeCast(abilityId);
+            return;
+        }
+
+        // Handle targeted spells (Phase 4 will implement targeting UI)
+        if (ability.targetingMode === MAGIC_CONSTANTS.TARGETING_MODES.ENEMY_TARGET) {
+            // For now, use selected enemy from tab targeting
+            if (gameState.selectedEnemy && !gameState.selectedEnemy.isDead) {
+                const enemyCenterX = gameState.selectedEnemy.x + gameState.selectedEnemy.width / 2;
+                const enemyCenterY = gameState.selectedEnemy.y + gameState.selectedEnemy.height / 2;
+                const playerCenterX = player.x + player.width / 2;
+                const playerCenterY = player.y + player.height / 2;
+
+                const distance = Math.sqrt(
+                    Math.pow(enemyCenterX - playerCenterX, 2) +
+                    Math.pow(enemyCenterY - playerCenterY, 2)
+                );
+
+                if (distance <= ability.range) {
+                    this.executeCast(abilityId, gameState.selectedEnemy);
+                } else {
+                    showMessage('Target out of range');
+                }
+            } else {
+                showMessage('No target selected');
+            }
+            return;
+        }
+
+        // Other targeting modes will be implemented in Phase 4
+        showMessage('Targeting mode not yet implemented');
+    },
+
+    /**
+     * Execute the spell cast
+     * @param {string} abilityId - The ability to cast
+     * @param {object} target - Optional target (for targeted spells)
+     */
+    executeCast(abilityId, target = null) {
+        const ability = ABILITIES[abilityId];
+
+        // Deduct mana cost
+        player.mana -= ability.manaCost;
+
+        // Apply cooldowns
+        this.state.globalCooldown = MAGIC_CONSTANTS.GLOBAL_COOLDOWN;
+        this.state.spellCooldowns[abilityId] = ability.cooldown;
+
+        // Execute spell effect based on type
+        if (ability.targetingMode === MAGIC_CONSTANTS.TARGETING_MODES.INSTANT_SELF) {
+            this.executeInstantSelf(ability);
+        } else if (ability.targetingMode === MAGIC_CONSTANTS.TARGETING_MODES.ENEMY_TARGET) {
+            this.executeEnemyTarget(ability, target);
+        }
+
+        // Update UI
+        updateUI();
+    },
+
+    /**
+     * Execute instant self-cast spell
+     * @param {object} ability - The ability definition
+     */
+    executeInstantSelf(ability) {
+        const playerCenterX = player.x + player.width / 2;
+        const playerCenterY = player.y + player.height / 2;
+
+        // Healing spell
+        if (ability.healing) {
+            const healAmount = ability.healing;
+            player.health = Math.min(player.maxHealth, player.health + healAmount);
+            createParticles(playerCenterX, playerCenterY, ability.color, 15);
+            showMessage(`${ability.name}: Healed ${healAmount} HP`);
+            return;
+        }
+
+        // AOE spell (Frost Nova)
+        if (ability.radius) {
+            let hitCount = 0;
+
+            gameState.enemies.forEach(enemy => {
+                if (enemy.isDead) return;
+
+                const enemyCenterX = enemy.x + enemy.width / 2;
+                const enemyCenterY = enemy.y + enemy.height / 2;
+                const dist = Math.sqrt(
+                    Math.pow(enemyCenterX - playerCenterX, 2) +
+                    Math.pow(enemyCenterY - playerCenterY, 2)
+                );
+
+                if (dist <= ability.radius) {
+                    // Calculate damage with spell power bonus
+                    const baseDamage = ability.damage || 0;
+                    const totalDamage = baseDamage + player.spellPower;
+                    enemy.takeDamage(totalDamage);
+                    createParticles(enemyCenterX, enemyCenterY, ability.color, 10);
+
+                    // Apply slow effect if present
+                    if (ability.slow && ability.slowDuration) {
+                        enemy.slowMultiplier = ability.slow;
+                        enemy.slowEndTime = performance.now() + ability.slowDuration;
+                    }
+
+                    hitCount++;
+                }
+            });
+
+            createParticles(playerCenterX, playerCenterY, ability.color, 30);
+            showMessage(`${ability.name}: Hit ${hitCount} enemies!`);
+        }
+    },
+
+    /**
+     * Execute enemy-targeted spell
+     * @param {object} ability - The ability definition
+     * @param {object} target - The target enemy
+     */
+    executeEnemyTarget(ability, target) {
+        if (!target || target.isDead) {
+            showMessage('Invalid target');
+            return;
+        }
+
+        const enemyCenterX = target.x + target.width / 2;
+        const enemyCenterY = target.y + target.height / 2;
+
+        // Calculate damage with spell power bonus
+        const baseDamage = ability.damage || 0;
+        const totalDamage = baseDamage + player.spellPower;
+
+        target.takeDamage(totalDamage);
+        createParticles(enemyCenterX, enemyCenterY, ability.color, 15);
+        showMessage(`${ability.name}: ${totalDamage} damage!`);
+    },
+
+    /**
+     * Cancel active targeting
+     */
+    cancelTargeting() {
+        this.state.targetingActive = false;
+        this.state.activeAbility = null;
+        this.state.targetingMode = null;
+        gameState.timeScale = 1.0;
+    },
+
+    /**
+     * Get cooldown percentage for UI display
+     * @param {string} abilityId - The ability to check
+     * @returns {number} Percentage from 0-100
+     */
+    getCooldownPercent(abilityId) {
+        const ability = ABILITIES[abilityId];
+        if (!ability) return 0;
+
+        const remaining = this.state.spellCooldowns[abilityId] || 0;
+        if (remaining <= 0) return 0;
+
+        return (remaining / ability.cooldown) * 100;
+    }
+};
+
+// ============================================================================
+// SECTION 5: ENTITY CLASSES
 // ============================================================================
 
 class Player {
@@ -601,7 +983,21 @@ class Player {
         this.health = this.maxHealth;
         this.mana = this.maxMana;  // Full mana restoration (Phase 1)
 
-        showMessage(`LEVEL UP! Lv.${this.level} (+${ATTRIBUTE_POINTS_PER_LEVEL} Pts)`);
+        // Unlock new spells at this level (Phase 2)
+        const newSpells = [];
+        Object.values(ABILITIES).forEach(ability => {
+            if (ability.unlockLevel === this.level && !this.unlockedSpells.includes(ability.id)) {
+                this.unlockedSpells.push(ability.id);
+                newSpells.push(ability.name);
+            }
+        });
+
+        // Show level up message with new spells
+        let levelUpMsg = `LEVEL UP! Lv.${this.level} (+${ATTRIBUTE_POINTS_PER_LEVEL} Pts)`;
+        if (newSpells.length > 0) {
+            levelUpMsg += ` - New Spell: ${newSpells.join(', ')}!`;
+        }
+        showMessage(levelUpMsg);
         createParticles(this.x + this.width / 2, this.y + this.height / 2, '#ffd700', 20);
         updateUI();
 
@@ -640,6 +1036,10 @@ class Player {
 
         // Reset attribute points
         this.attributePoints = 0;
+
+        // Reset spell system (Phase 2)
+        this.unlockedSpells = ['magic_missile'];
+        this.hotbar = ['magic_missile', null, null, null, null, null, null, null];
 
         // Recalculate computed stats
         this.updateComputedStats();
@@ -1343,7 +1743,10 @@ const SaveManager = {
                         wis: player.attributes.wisdom,
                         lck: player.attributes.luck
                     },
-                    ap: player.attributePoints  // Available attribute points
+                    ap: player.attributePoints,  // Available attribute points
+                    // Spell system (Phase 2)
+                    spells: player.unlockedSpells,  // Unlocked spells array
+                    hotbar: player.hotbar  // Hotbar configuration
                 },
                 r: gameState.currentRoom,  // Current room
                 ed: gameState.enemiesDefeated,  // Enemies defeated total
@@ -1453,6 +1856,21 @@ const SaveManager = {
 
             // Restore mana (Phase 1 - with legacy save compatibility)
             player.mana = saveData.p.mp !== undefined ? saveData.p.mp : player.maxMana;
+
+            // Restore spell system (Phase 2 - with legacy save compatibility)
+            if (saveData.p.spells && Array.isArray(saveData.p.spells)) {
+                player.unlockedSpells = saveData.p.spells;
+            } else {
+                // Legacy save: start with magic missile only
+                player.unlockedSpells = ['magic_missile'];
+            }
+
+            if (saveData.p.hotbar && Array.isArray(saveData.p.hotbar)) {
+                player.hotbar = saveData.p.hotbar;
+            } else {
+                // Legacy save: default hotbar
+                player.hotbar = ['magic_missile', null, null, null, null, null, null, null];
+            }
 
             // Reset temporary combat state
             player.attackCooldown = 0;
@@ -1636,6 +2054,19 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'Tab') {
         e.preventDefault(); // Prevent browser tab navigation
         cycleTarget(e.shiftKey ? -1 : 1);
+        return;
+    }
+
+    // Handle spell casting (1-8 keys) - Phase 2
+    const keyNum = parseInt(e.key);
+    if (keyNum >= 1 && keyNum <= 8 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const slotIndex = keyNum - 1;
+        const spellId = player.hotbar[slotIndex];
+        if (spellId) {
+            MagicManager.beginCast(spellId);
+        } else {
+            showMessage(`Hotbar slot ${keyNum} is empty`);
+        }
         return;
     }
 
@@ -2542,6 +2973,9 @@ function initGame() {
     const saveMenuHandler = setupSaveMenu();
     setupViewportControls();
 
+    // Initialize magic system (Phase 2)
+    MagicManager.init();
+
     // Unified keyboard handler for ESC key (closes any open menu)
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
@@ -2584,6 +3018,9 @@ function gameLoop() {
 
     gameState.gameTime++;                              // Keep as frame counter (for visual effects)
     gameState.elapsedTime += gameState.deltaTime;      // Track total milliseconds
+
+    // Update magic system (Phase 2)
+    MagicManager.update(gameState.deltaTime);
 
     // Update camera to follow player
     updateCameraFollow();
