@@ -1,3 +1,16 @@
+// ============================================================================
+// DUNGEON CRAWLER RPG - Main Game File
+// ============================================================================
+// Phase 0: Time-Based System Implemented
+// - All cooldowns converted from frames to milliseconds
+// - Movement uses scaledDelta for consistent speed across frame rates
+// - Support for slow-motion effects via timeScale
+// ============================================================================
+
+// ============================================================================
+// SECTION 1: CONSTANTS & CONFIGURATION
+// ============================================================================
+
 // Game Constants
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
@@ -12,8 +25,12 @@ const FUTURE_ATTRIBUTES = ['intelligence', 'wisdom'];
 const MAGIC_ATTR_WARNING_KEY = 'hasSeenMagicAttrWarning';
 
 // Combat Constants
-const ENEMY_ATTACK_COOLDOWN = 60;
+const ENEMY_ATTACK_COOLDOWN = 1000; // 1 second in milliseconds (was 60 frames @ 60 FPS)
 const DODGE_PARTICLE_COLOR = '#88ff88'; // Soft green for dodge visual feedback
+
+// ============================================================================
+// SECTION 2: CANVAS & RENDERING SETUP
+// ============================================================================
 
 // Get canvas and context
 const canvas = document.getElementById('gameCanvas');
@@ -32,6 +49,10 @@ canvas.width = CANVAS_WIDTH;
 canvas.height = CANVAS_HEIGHT;
 
 // Game State
+// ============================================================================
+// SECTION 3: GAME STATE
+// ============================================================================
+
 const gameState = {
     keys: {},
     enemies: [],
@@ -42,9 +63,16 @@ const gameState = {
     particles: [],
     enemiesDefeated: 0,
     chestsOpened: 0,
-    gameTime: 0,
+
+    // Time tracking (Phase 0: Time-based system)
+    gameTime: 0,           // Frame counter (increments by 1) - keep for visual effects
+    elapsedTime: 0,        // Total elapsed milliseconds since game start
+    lastFrameTime: performance.now(),
+    deltaTime: 0,          // Milliseconds since last frame
+    timeScale: 1.0,        // For slow-motion effects (1.0 = normal, 0.5 = half speed)
+
     message: '',
-    messageTimer: 0,
+    messageTimer: 0,       // Will be converted to milliseconds
     currentRoom: 0,
     rooms: []
 };
@@ -142,6 +170,10 @@ const roomTemplates = [
 ];
 
 // Player Class
+// ============================================================================
+// SECTION 4: ENTITY CLASSES
+// ============================================================================
+
 class Player {
     constructor(x, y) {
         this.x = x;
@@ -180,10 +212,10 @@ class Player {
 
         // Combat
         this.isAttacking = false;
-        this.attackCooldown = 0;
+        this.attackCooldown = 0;        // Milliseconds remaining (time-based)
         this.attackRange = 45;
         this.invulnerable = false;
-        this.invulnerableTimer = 0;
+        this.invulnerabilityTime = 0;   // Milliseconds remaining (time-based, replaces invulnerableTimer)
 
         // Movement
         this.moving = false;
@@ -250,27 +282,36 @@ class Player {
     }
 
     update() {
+        // Apply time scale for slow-motion effects (Phase 0)
+        const scaledDelta = gameState.deltaTime * gameState.timeScale;
+
+        // Movement speed: this.speed is in pixels per frame @ 60 FPS baseline
+        // Formula: this.speed * (deltaTime / 16.67) = pixels to move this frame
+        // At 60 FPS: 3 * (16.67 / 16.67) = 3 pixels
+        // At 30 FPS: 3 * (33.33 / 16.67) = 6 pixels (but takes 2x as long in real time)
+        const moveSpeed = this.speed * (scaledDelta / 16.67);
+
         // Handle movement from keyboard
         let dx = 0;
         let dy = 0;
 
         if (gameState.keys['ArrowUp'] || gameState.keys['w'] || gameState.keys['W']) {
-            dy = -this.speed;
+            dy = -moveSpeed;
             this.direction = 2;
             this.moving = true;
         }
         if (gameState.keys['ArrowDown'] || gameState.keys['s'] || gameState.keys['S']) {
-            dy = this.speed;
+            dy = moveSpeed;
             this.direction = 0;
             this.moving = true;
         }
         if (gameState.keys['ArrowLeft'] || gameState.keys['a'] || gameState.keys['A']) {
-            dx = -this.speed;
+            dx = -moveSpeed;
             this.direction = 3;
             this.moving = true;
         }
         if (gameState.keys['ArrowRight'] || gameState.keys['d'] || gameState.keys['D']) {
-            dx = this.speed;
+            dx = moveSpeed;
             this.direction = 1;
             this.moving = true;
         }
@@ -312,11 +353,13 @@ class Player {
             this.tryAttack();
         }
 
-        // Update timers
-        if (this.attackCooldown > 0) this.attackCooldown--;
-        if (this.invulnerableTimer > 0) {
-            this.invulnerableTimer--;
-            if (this.invulnerableTimer === 0) {
+        // Update timers (time-based, not affected by timeScale)
+        if (this.attackCooldown > 0) {
+            this.attackCooldown = Math.max(0, this.attackCooldown - gameState.deltaTime);
+        }
+        if (this.invulnerabilityTime > 0) {
+            this.invulnerabilityTime = Math.max(0, this.invulnerabilityTime - gameState.deltaTime);
+            if (this.invulnerabilityTime === 0) {
                 this.invulnerable = false;
             }
         }
@@ -392,7 +435,9 @@ class Player {
         if (this.attackCooldown === 0 && !this.isAttacking) {
             this.isAttacking = true;
             // Attack speed affects cooldown (higher multiplier = faster attacks)
-            this.attackCooldown = Math.max(10, Math.floor(30 / this.attackSpeedMultiplier));
+            // Base: 500ms (was 30 frames @ 60 FPS)
+            const baseCooldown = 500;
+            this.attackCooldown = Math.max(167, baseCooldown / this.attackSpeedMultiplier);
 
             // Attack selected target only (tab targeting)
             if (gameState.selectedEnemy && !gameState.selectedEnemy.isDead) {
@@ -453,7 +498,7 @@ class Player {
             const actualDamage = Math.max(1, damage - this.defense / 2);
             this.health -= actualDamage;
             this.invulnerable = true;
-            this.invulnerableTimer = 60;
+            this.invulnerabilityTime = 1000; // 1 second in milliseconds (was 60 frames)
 
             if (this.health <= 0) {
                 this.health = 0;
@@ -623,13 +668,28 @@ class Enemy {
 
         this.aggroRange = 200;
         this.attackRange = 35;
-        this.attackCooldown = 0;
+        this.attackCooldown = 0;        // Milliseconds remaining (time-based)
         this.isDead = false;
         this.moveTimer = 0;
+
+        // Status effects (Phase 0)
+        this.slowMultiplier = 1.0;      // 1.0 = normal speed, 0.5 = 50% slow
+        this.slowEndTime = 0;           // Timestamp when slow expires (ms)
     }
 
     update(player) {
         if (this.isDead) return;
+
+        // Check if slow has expired
+        if (performance.now() >= this.slowEndTime) {
+            this.slowMultiplier = 1.0;
+        }
+
+        // Apply time scale AND slow effect
+        const scaledDelta = gameState.deltaTime * gameState.timeScale;
+        // this.speed is in pixels per frame @ 60 FPS baseline
+        const baseSpeed = this.speed * (scaledDelta / 16.67);
+        const moveSpeed = baseSpeed * this.slowMultiplier;
 
         const dx = (player.x + player.width / 2) - (this.x + this.width / 2);
         const dy = (player.y + player.height / 2) - (this.y + this.height / 2);
@@ -639,8 +699,8 @@ class Enemy {
             // Move towards player
             if (distance > this.attackRange) {
                 const angle = Math.atan2(dy, dx);
-                const newX = this.x + Math.cos(angle) * this.speed;
-                const newY = this.y + Math.sin(angle) * this.speed;
+                const newX = this.x + Math.cos(angle) * moveSpeed;
+                const newY = this.y + Math.sin(angle) * moveSpeed;
 
                 if (!this.checkWallCollision(newX, this.y)) {
                     this.x = newX;
@@ -654,7 +714,10 @@ class Enemy {
             }
         }
 
-        if (this.attackCooldown > 0) this.attackCooldown--;
+        // Update cooldown (time-based, not affected by timeScale)
+        if (this.attackCooldown > 0) {
+            this.attackCooldown = Math.max(0, this.attackCooldown - gameState.deltaTime);
+        }
     }
 
     checkWallCollision(x, y) {
@@ -771,7 +834,12 @@ class Enemy {
             }
         }
 
-        ctx.fillStyle = this.color;
+        // Visual indicator for slowed enemies (Phase 0)
+        if (this.slowMultiplier < 1.0) {
+            ctx.fillStyle = '#00bfff'; // Blue/frozen color
+        } else {
+            ctx.fillStyle = this.color;
+        }
         ctx.fillRect(this.x, this.y, this.width, this.height);
 
         // Eyes
@@ -805,6 +873,17 @@ class Particle {
         this.size = Math.random() * 3 + 2;
     }
 
+    // Reset method for particle pooling (Phase 0)
+    reset(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.velocityX = (Math.random() - 0.5) * 5;
+        this.velocityY = (Math.random() - 0.5) * 5;
+        this.size = Math.random() * 3 + 2;
+        this.life = this.maxLife; // Reset to full life
+    }
+
     update() {
         this.x += this.velocityX;
         this.y += this.velocityY;
@@ -824,6 +903,10 @@ class Particle {
         return this.life <= 0;
     }
 }
+
+// ============================================================================
+// SECTION 5: GAME SYSTEMS & UTILITIES
+// ============================================================================
 
 // Target Selection Functions
 
@@ -933,7 +1016,7 @@ function createParticles(x, y, color, count) {
 
 function showMessage(text) {
     gameState.message = text;
-    gameState.messageTimer = 120;
+    gameState.messageTimer = 3000; // 3 seconds in milliseconds (was 120 frames @ 60 FPS = 2 sec)
     document.getElementById('message-display').textContent = text;
 }
 
@@ -2407,7 +2490,13 @@ if (document.readyState === 'loading') {
 
 // Game Loop
 function gameLoop() {
-    gameState.gameTime++;
+    // Update time tracking (Phase 0: Time-based system)
+    const currentTime = performance.now();
+    gameState.deltaTime = currentTime - gameState.lastFrameTime;
+    gameState.lastFrameTime = currentTime;
+
+    gameState.gameTime++;                              // Keep as frame counter (for visual effects)
+    gameState.elapsedTime += gameState.deltaTime;      // Track total milliseconds
 
     // Update camera to follow player
     updateCameraFollow();
@@ -2458,9 +2547,9 @@ function gameLoop() {
     // Restore context state
     ctx.restore();
 
-    // Update message timer
+    // Update message timer (time-based)
     if (gameState.messageTimer > 0) {
-        gameState.messageTimer--;
+        gameState.messageTimer = Math.max(0, gameState.messageTimer - gameState.deltaTime);
         if (gameState.messageTimer === 0) {
             document.getElementById('message-display').textContent = '';
         }
