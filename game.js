@@ -24,6 +24,10 @@ const ATTRIBUTE_POINTS_PER_LEVEL = 3;
 const FUTURE_ATTRIBUTES = ['intelligence', 'wisdom'];
 const MAGIC_ATTR_WARNING_KEY = 'hasSeenMagicAttrWarning';
 
+// Time System Constants (Phase 0)
+const BASELINE_FRAME_TIME = 16.67; // 1 frame at 60 FPS in milliseconds (used for movement normalization)
+const MAX_DELTA_TIME = 100;        // Maximum deltaTime cap (100ms = 10 FPS minimum, prevents physics explosion)
+
 // Combat Constants
 const ENEMY_ATTACK_COOLDOWN = 1000; // 1 second in milliseconds (was 60 frames @ 60 FPS)
 const DODGE_PARTICLE_COLOR = '#88ff88'; // Soft green for dodge visual feedback
@@ -286,10 +290,10 @@ class Player {
         const scaledDelta = gameState.deltaTime * gameState.timeScale;
 
         // Movement speed: this.speed is in pixels per frame @ 60 FPS baseline
-        // Formula: this.speed * (deltaTime / 16.67) = pixels to move this frame
+        // Formula: this.speed * (deltaTime / BASELINE_FRAME_TIME) = pixels to move this frame
         // At 60 FPS: 3 * (16.67 / 16.67) = 3 pixels
         // At 30 FPS: 3 * (33.33 / 16.67) = 6 pixels (but takes 2x as long in real time)
-        const moveSpeed = this.speed * (scaledDelta / 16.67);
+        const moveSpeed = this.speed * (scaledDelta / BASELINE_FRAME_TIME);
 
         // Handle movement from keyboard
         let dx = 0;
@@ -688,7 +692,7 @@ class Enemy {
         // Apply time scale AND slow effect
         const scaledDelta = gameState.deltaTime * gameState.timeScale;
         // this.speed is in pixels per frame @ 60 FPS baseline
-        const baseSpeed = this.speed * (scaledDelta / 16.67);
+        const baseSpeed = this.speed * (scaledDelta / BASELINE_FRAME_TIME);
         const moveSpeed = baseSpeed * this.slowMultiplier;
 
         const dx = (player.x + player.width / 2) - (this.x + this.width / 2);
@@ -2494,6 +2498,16 @@ function gameLoop() {
     const currentTime = performance.now();
     gameState.deltaTime = currentTime - gameState.lastFrameTime;
     gameState.lastFrameTime = currentTime;
+
+    // Cap deltaTime to prevent physics explosion when tab is inactive
+    if (gameState.deltaTime > MAX_DELTA_TIME) {
+        gameState.deltaTime = MAX_DELTA_TIME;
+    }
+
+    // Handle edge case where deltaTime is exactly 0 (very rare)
+    if (gameState.deltaTime === 0) {
+        gameState.deltaTime = BASELINE_FRAME_TIME; // Assume 60 FPS baseline
+    }
 
     gameState.gameTime++;                              // Keep as frame counter (for visual effects)
     gameState.elapsedTime += gameState.deltaTime;      // Track total milliseconds
