@@ -145,10 +145,28 @@ class Player {
         this.level = 1;
         this.xp = 0;
         this.xpNeeded = 100;
-        this.maxHealth = 100;
-        this.health = 100;
-        this.attack = 10;
-        this.defense = 5;
+
+        // Base stats (used as foundation for computed stats)
+        this.baseMaxHealth = 100;
+        this.baseAttack = 10;
+        this.baseDefense = 5;
+
+        // Primary Attributes (6 core stats)
+        this.attributes = {
+            strength: 5,      // Affects attack damage
+            vitality: 5,      // Affects max health and defense
+            dexterity: 5,     // Affects crit chance, dodge chance, attack speed
+            intelligence: 5,  // Affects magic damage (future)
+            wisdom: 5,        // Affects magic defense (future)
+            luck: 5           // Affects crit chance and loot quality (future)
+        };
+
+        // Attribute points for allocation
+        this.attributePoints = 0;
+
+        // Computed stats (calculated from base + attributes)
+        this.updateComputedStats();
+        this.health = this.maxHealth;
 
         // Combat
         this.isAttacking = false;
@@ -161,6 +179,64 @@ class Player {
         this.moving = false;
         this.targetX = x;
         this.targetY = y;
+    }
+
+    /**
+     * Recalculate all computed stats based on base values, level, and attributes
+     */
+    updateComputedStats() {
+        // Calculate derived stats from attributes
+        const strBonus = this.attributes.strength * 2;  // +2 attack per STR
+        const vitBonus = this.attributes.vitality * 5;  // +5 max HP per VIT
+        const vitDefBonus = Math.floor(this.attributes.vitality * 0.3);  // +0.3 defense per VIT
+
+        // Update computed stats
+        this.attack = this.baseAttack + strBonus + this.level;
+        this.maxHealth = this.baseMaxHealth + vitBonus + (this.level * 5);
+        this.defense = this.baseDefense + vitDefBonus + this.level;
+
+        // Secondary attributes (computed getters would be cleaner, but this is simpler)
+        this.critChance = Math.min(0.5, 0.05 +
+            (this.attributes.dexterity * 0.01) +
+            (this.attributes.luck * 0.01)
+        ); // 5% base, +1% per DEX, +1% per LCK, cap at 50%
+
+        this.dodgeChance = Math.min(0.3, this.attributes.dexterity * 0.01); // +1% dodge per DEX, cap at 30%
+
+        this.attackSpeedMultiplier = 1.0 + (this.attributes.dexterity * 0.02); // +2% attack speed per DEX
+    }
+
+    /**
+     * Allocate attribute points
+     * @param {string} attributeName - Name of the attribute (strength, vitality, etc.)
+     * @param {number} points - Number of points to allocate (default 1)
+     * @returns {object} Result with success flag and optional error message
+     */
+    allocateAttribute(attributeName, points = 1) {
+        // Validation: Check if player has enough points
+        if (this.attributePoints < points) {
+            return { success: false, error: 'Not enough attribute points' };
+        }
+
+        // Validation: Check if attribute name is valid
+        const validAttributes = ['strength', 'vitality', 'dexterity', 'intelligence', 'wisdom', 'luck'];
+        if (!validAttributes.includes(attributeName)) {
+            return { success: false, error: 'Invalid attribute name' };
+        }
+
+        // Validation: Check if allocation would exceed cap (100)
+        if (this.attributes[attributeName] + points > 100) {
+            return { success: false, error: `Attribute would exceed maximum (100)` };
+        }
+
+        // Allocate the points
+        this.attributes[attributeName] += points;
+        this.attributePoints -= points;
+
+        // Recalculate all computed stats
+        this.updateComputedStats();
+
+        return { success: true };
     }
 
     update() {
@@ -305,7 +381,8 @@ class Player {
     tryAttack() {
         if (this.attackCooldown === 0 && !this.isAttacking) {
             this.isAttacking = true;
-            this.attackCooldown = 30;
+            // Attack speed affects cooldown (higher multiplier = faster attacks)
+            this.attackCooldown = Math.max(10, Math.floor(30 / this.attackSpeedMultiplier));
 
             // Attack selected target only (tab targeting)
             if (gameState.selectedEnemy && !gameState.selectedEnemy.isDead) {
@@ -336,9 +413,29 @@ class Player {
     }
 
     dealDamage(enemy) {
-        const damage = Math.max(1, this.attack - enemy.defense / 2);
+        // Check for dodge (if enemy has dodge chance)
+        const enemyDodgeChance = enemy.dodgeChance || 0;
+        if (Math.random() < enemyDodgeChance) {
+            showMessage('DODGED!');
+            createParticles(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, '#ffffff', 8);
+            return;
+        }
+
+        // Calculate base damage
+        let damage = Math.max(1, this.attack - enemy.defense / 2);
+
+        // Check for critical hit
+        const isCrit = Math.random() < this.critChance;
+        if (isCrit) {
+            damage *= 2.0;  // Critical hits deal 2x damage
+            showMessage(`CRITICAL HIT! ${damage.toFixed(0)} damage!`);
+            createParticles(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, '#ff0000', 15);
+        } else {
+            showMessage(`Hit for ${damage.toFixed(0)} damage`);
+            createParticles(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, '#ff6600', 5);
+        }
+
         enemy.takeDamage(damage);
-        createParticles(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, '#ff0000', 5);
     }
 
     takeDamage(damage) {
@@ -374,12 +471,21 @@ class Player {
         this.xp -= this.xpNeeded;
         this.xpNeeded = Math.floor(this.xpNeeded * 1.5);
 
-        this.maxHealth += 20;
-        this.health = this.maxHealth;
-        this.attack += 5;
-        this.defense += 2;
+        // Grant attribute points (3 per level)
+        this.attributePoints += 3;
 
-        showMessage(`LEVEL UP! Now level ${this.level}!`);
+        // Small automatic base stat increases (reduced from before)
+        this.baseMaxHealth += 5;  // Reduced from +20 (attributes provide more)
+        this.baseAttack += 1;     // Reduced from +5 (attributes provide more)
+        this.baseDefense += 1;    // Reduced from +2 (attributes provide more)
+
+        // Recalculate all computed stats
+        this.updateComputedStats();
+
+        // Full heal on level up
+        this.health = this.maxHealth;
+
+        showMessage(`LEVEL UP! Level ${this.level}! (+3 Attribute Points)`);
         createParticles(this.x + this.width / 2, this.y + this.height / 2, '#ffd700', 20);
         updateUI();
 
@@ -400,10 +506,31 @@ class Player {
         this.level = 1;
         this.xp = 0;
         this.xpNeeded = 100;
-        this.maxHealth = 100;
-        this.health = 100;
-        this.attack = 10;
-        this.defense = 5;
+
+        // Reset base stats
+        this.baseMaxHealth = 100;
+        this.baseAttack = 10;
+        this.baseDefense = 5;
+
+        // Reset attributes to starting values
+        this.attributes = {
+            strength: 5,
+            vitality: 5,
+            dexterity: 5,
+            intelligence: 5,
+            wisdom: 5,
+            luck: 5
+        };
+
+        // Reset attribute points
+        this.attributePoints = 0;
+
+        // Recalculate computed stats
+        this.updateComputedStats();
+
+        // Full heal
+        this.health = this.maxHealth;
+
         gameState.enemiesDefeated = 0;
         gameState.chestsOpened = 0;
         loadRoom(0, true); // Skip save on death/reset
@@ -797,8 +924,10 @@ function updateUI() {
     document.getElementById('player-level').textContent = player.level;
     document.getElementById('player-xp').textContent = player.xp;
     document.getElementById('player-xp-needed').textContent = player.xpNeeded;
-    document.getElementById('player-attack').textContent = player.attack;
-    document.getElementById('player-defense').textContent = player.defense;
+    document.getElementById('player-attack').textContent = Math.floor(player.attack);
+    document.getElementById('player-defense').textContent = Math.floor(player.defense);
+    document.getElementById('player-crit').textContent = (player.critChance * 100).toFixed(1) + '%';
+    document.getElementById('player-dodge').textContent = (player.dodgeChance * 100).toFixed(1) + '%';
     document.getElementById('enemies-defeated').textContent = gameState.enemiesDefeated;
     document.getElementById('current-room').textContent = gameState.currentRoom + 1;
 
@@ -808,6 +937,25 @@ function updateUI() {
 
     const xpPercent = (player.xp / player.xpNeeded) * 100;
     document.getElementById('xp-bar').style.width = xpPercent + '%';
+
+    // Update attribute points counter
+    document.getElementById('attr-points-value').textContent = player.attributePoints;
+
+    // Update attribute values
+    document.getElementById('attr-strength').textContent = player.attributes.strength;
+    document.getElementById('attr-vitality').textContent = player.attributes.vitality;
+    document.getElementById('attr-dexterity').textContent = player.attributes.dexterity;
+    document.getElementById('attr-intelligence').textContent = player.attributes.intelligence;
+    document.getElementById('attr-wisdom').textContent = player.attributes.wisdom;
+    document.getElementById('attr-luck').textContent = player.attributes.luck;
+
+    // Enable/disable attribute buttons based on available points
+    const attrButtons = document.querySelectorAll('.attr-btn');
+    attrButtons.forEach(btn => {
+        const attrName = btn.getAttribute('data-attr');
+        const canAllocate = player.attributePoints > 0 && player.attributes[attrName] < 100;
+        btn.disabled = !canAllocate;
+    });
 }
 
 function updateZoomIndicator() {
@@ -1000,9 +1148,20 @@ const SaveManager = {
                     xp: player.xp,
                     xpn: player.xpNeeded,
                     hp: player.health,
-                    mhp: player.maxHealth,
-                    atk: player.attack,
-                    def: player.defense
+                    // Base stats (foundation for computed stats)
+                    bmhp: player.baseMaxHealth,
+                    batk: player.baseAttack,
+                    bdef: player.baseDefense,
+                    // Attributes
+                    attr: {
+                        str: player.attributes.strength,
+                        vit: player.attributes.vitality,
+                        dex: player.attributes.dexterity,
+                        int: player.attributes.intelligence,
+                        wis: player.attributes.wisdom,
+                        lck: player.attributes.luck
+                    },
+                    ap: player.attributePoints  // Available attribute points
                 },
                 r: gameState.currentRoom,  // Current room
                 ed: gameState.enemiesDefeated,  // Enemies defeated total
@@ -1064,14 +1223,51 @@ const SaveManager = {
 
         try {
             console.log('[SaveManager] Restoring player stats');
-            // Restore player stats (except position - will restore after loadRoom)
+            // Restore player progression
             player.level = saveData.p.lvl;
             player.xp = saveData.p.xp;
             player.xpNeeded = saveData.p.xpn;
+
+            // Restore base stats
+            if (saveData.p.bmhp !== undefined) {
+                player.baseMaxHealth = saveData.p.bmhp;
+                player.baseAttack = saveData.p.batk;
+                player.baseDefense = saveData.p.bdef;
+            } else {
+                // Legacy save compatibility: calculate base stats from old saves
+                player.baseMaxHealth = 100;
+                player.baseAttack = 10;
+                player.baseDefense = 5;
+            }
+
+            // Restore attributes
+            if (saveData.p.attr) {
+                player.attributes.strength = saveData.p.attr.str || 5;
+                player.attributes.vitality = saveData.p.attr.vit || 5;
+                player.attributes.dexterity = saveData.p.attr.dex || 5;
+                player.attributes.intelligence = saveData.p.attr.int || 5;
+                player.attributes.wisdom = saveData.p.attr.wis || 5;
+                player.attributes.luck = saveData.p.attr.lck || 5;
+            } else {
+                // Legacy save compatibility: use default attributes
+                player.attributes = {
+                    strength: 5,
+                    vitality: 5,
+                    dexterity: 5,
+                    intelligence: 5,
+                    wisdom: 5,
+                    luck: 5
+                };
+            }
+
+            // Restore attribute points
+            player.attributePoints = saveData.p.ap || 0;
+
+            // Recalculate all computed stats
+            player.updateComputedStats();
+
+            // Restore health
             player.health = saveData.p.hp;
-            player.maxHealth = saveData.p.mhp;
-            player.attack = saveData.p.atk;
-            player.defense = saveData.p.def;
 
             // Reset temporary combat state
             player.attackCooldown = 0;
@@ -1464,6 +1660,53 @@ function setupCharacterMenu() {
         if (e.target === charMenu) {
             closeMenu();
         }
+    });
+
+    // Attribute allocation buttons
+    const attrButtons = document.querySelectorAll('.attr-btn');
+    attrButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const attrName = btn.getAttribute('data-attr');
+            const result = player.allocateAttribute(attrName, 1);
+
+            if (result.success) {
+                // Update UI
+                updateUI();
+
+                // Visual feedback - create particles
+                const rect = btn.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+
+                // Create a temporary particle effect on the button
+                const particle = document.createElement('div');
+                particle.textContent = '+1';
+                particle.style.position = 'fixed';
+                particle.style.left = centerX + 'px';
+                particle.style.top = centerY + 'px';
+                particle.style.color = '#FFD700';
+                particle.style.fontSize = '20px';
+                particle.style.fontWeight = 'bold';
+                particle.style.pointerEvents = 'none';
+                particle.style.zIndex = '10000';
+                particle.style.transition = 'all 0.5s ease-out';
+                document.body.appendChild(particle);
+
+                // Animate upward and fade out
+                setTimeout(() => {
+                    particle.style.transform = 'translateY(-30px)';
+                    particle.style.opacity = '0';
+                }, 10);
+
+                // Remove after animation
+                setTimeout(() => {
+                    document.body.removeChild(particle);
+                }, 600);
+            } else {
+                // Show error message
+                showMessage(result.error);
+            }
+        });
     });
 
     // Return close function for keyboard handler
