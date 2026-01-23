@@ -146,6 +146,28 @@ body {
     min-width: 65px;
 }
 
+/* Mana Bar Styling (Phase 1) */
+.quick-mana {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.mana-bar {
+    background: linear-gradient(90deg, #4fc3f7, #2196F3);
+    width: 100%;
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+#quick-mana-text {
+    color: #fff;
+    font-size: 0.85em;
+    font-weight: bold;
+    min-width: 65px;
+}
+
 .quick-level {
     color: #FFD700;
     font-weight: bold;
@@ -549,6 +571,10 @@ body {
     }
 
     #quick-health-text {
+        font-size: 0.75em;
+    }
+
+    #quick-mana-text {
         font-size: 0.75em;
     }
 

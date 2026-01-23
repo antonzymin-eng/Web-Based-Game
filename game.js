@@ -32,6 +32,23 @@ const MAX_DELTA_TIME = 100;        // Maximum deltaTime cap (100ms = 10 FPS mini
 const ENEMY_ATTACK_COOLDOWN = 1000; // 1 second in milliseconds (was 60 frames @ 60 FPS)
 const DODGE_PARTICLE_COLOR = '#88ff88'; // Soft green for dodge visual feedback
 
+// Magic System Constants (Phase 1)
+const MAGIC_CONSTANTS = {
+    BASE_MANA: 150,
+    BASE_MANA_REGEN: 3.0, // per second
+    GLOBAL_COOLDOWN: 500, // milliseconds
+    TARGETING_MODES: {
+        INSTANT: 'instant',           // No targeting needed
+        INSTANT_SELF: 'instant_self', // Self-cast (heal, buff)
+        ENEMY_TARGET: 'enemy_target', // Uses tab-target system
+        CIRCLE_AOE: 'circle_aoe',     // Movable circle
+        CONE: 'cone',                 // Cone from player
+        LINE: 'line',                 // Line from player
+        LINE_GROUND: 'line_ground'    // Line independent of player
+    },
+    PARTICLE_POOL_SIZE: 300 // Max active particles
+}
+
 // ============================================================================
 // SECTION 2: CANVAS & RENDERING SETUP
 // ============================================================================
@@ -210,9 +227,24 @@ class Player {
         // Attribute points for allocation
         this.attributePoints = 0;
 
+        // Mana System (Phase 1)
+        this.baseMana = MAGIC_CONSTANTS.BASE_MANA; // 150
+        this.mana = 0; // Will be set after updateComputedStats()
+        this.manaRegen = 0; // Per second, calculated from Wisdom
+        this.spellPower = 0; // Spell damage bonus, from Intelligence
+        this.magicDefense = 0; // Magic damage reduction, from Wisdom
+
+        // Spell System (Phase 1)
+        this.unlockedSpells = ['magic_missile']; // Start with one basic spell
+        this.hotbar = [
+            'magic_missile', // Slot 1
+            null, null, null, null, null, null, null // Slots 2-8 empty
+        ];
+
         // Computed stats (calculated from base + attributes)
         this.updateComputedStats();
         this.health = this.maxHealth;
+        this.mana = this.maxMana; // Set mana to full after stats calculated
 
         // Combat
         this.isAttacking = false;
@@ -250,6 +282,25 @@ class Player {
         this.dodgeChance = Math.min(0.3, this.attributes.dexterity * 0.01); // +1% dodge per DEX, cap at 30%
 
         this.attackSpeedMultiplier = 1.0 + (this.attributes.dexterity * 0.02); // +2% attack speed per DEX
+
+        // Magic stats (Phase 1)
+        const intBonus = this.attributes.intelligence - 5; // 0 at base 5 INT
+        const wisBonus = this.attributes.wisdom - 5; // 0 at base 5 WIS
+
+        this.maxMana = this.baseMana + (intBonus * 10) + (this.level * 5);
+        // Base 150 + (0 * 10) + (1 * 5) = 155 at level 1
+        // At 10 INT: 150 + (5 * 10) + 5 = 205
+
+        this.manaRegen = MAGIC_CONSTANTS.BASE_MANA_REGEN + (wisBonus * 0.2);
+        // Base 3.0/sec + (0 * 0.2) = 3.0/sec at level 1
+        // At 10 WIS: 3.0 + (5 * 0.2) = 4.0/sec
+
+        this.spellPower = intBonus * 3;
+        // 0 at base 5 INT
+        // 15 at 10 INT
+
+        this.magicDefense = this.baseDefense + (wisBonus * 0.8);
+        // Physical defense + magic defense bonus
     }
 
     /**
@@ -367,6 +418,11 @@ class Player {
                 this.invulnerable = false;
             }
         }
+
+        // Mana regeneration (Phase 1 - time-based, not affected by timeScale)
+        const manaRegenPerMs = this.manaRegen / 1000; // Per second → per millisecond
+        const manaGain = manaRegenPerMs * gameState.deltaTime;
+        this.mana = Math.min(this.maxMana, this.mana + manaGain);
     }
 
     checkWallCollision(x, y) {
@@ -1032,6 +1088,12 @@ function updateUI() {
     const quickHealthPercent = (player.health / player.maxHealth) * 100;
     document.getElementById('quick-health-bar').style.width = quickHealthPercent + '%';
 
+    // Update mana display (Phase 1)
+    const manaText = `${Math.floor(player.mana)}/${player.maxMana}`;
+    document.getElementById('quick-mana-text').textContent = manaText;
+    const manaPercent = (player.mana / player.maxMana) * 100;
+    document.getElementById('quick-mana-bar').style.width = manaPercent + '%';
+
     // Update character menu
     document.getElementById('player-level').textContent = player.level;
     document.getElementById('player-xp').textContent = player.xp;
@@ -1046,6 +1108,11 @@ function updateUI() {
     const healthPercent = (player.health / player.maxHealth) * 100;
     document.getElementById('health-bar').style.width = healthPercent + '%';
     document.getElementById('health-text').textContent = `${Math.ceil(player.health)}/${player.maxHealth}`;
+
+    // Update mana stats in character menu (Phase 1)
+    document.getElementById('mana-text-detail').textContent = `${Math.floor(player.mana)}/${player.maxMana}`;
+    document.getElementById('mana-regen-text').textContent = player.manaRegen.toFixed(1) + '/sec';
+    document.getElementById('spell-power-text').textContent = player.spellPower;
 
     const xpPercent = (player.xp / player.xpNeeded) * 100;
     document.getElementById('xp-bar').style.width = xpPercent + '%';
