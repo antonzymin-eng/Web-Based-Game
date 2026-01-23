@@ -667,6 +667,14 @@ class Enemy {
     tryAttack(player) {
         if (this.attackCooldown === 0) {
             this.attackCooldown = 60;
+
+            // Check if player dodges the attack
+            if (Math.random() < player.dodgeChance) {
+                showMessage('You dodged!');
+                createParticles(player.x + player.width / 2, player.y + player.height / 2, '#00ff00', 8);
+                return;
+            }
+
             player.takeDamage(this.attack);
         }
     }
@@ -1667,6 +1675,20 @@ function setupCharacterMenu() {
     attrButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             const attrName = btn.getAttribute('data-attr');
+
+            // Warn about future attributes (INT/WIS)
+            if (attrName === 'intelligence' || attrName === 'wisdom') {
+                const attrDisplayName = attrName === 'intelligence' ? 'Intelligence' : 'Wisdom';
+                const confirmed = confirm(
+                    `⚠️ ${attrDisplayName} is not yet implemented.\n\n` +
+                    `It will affect magic damage/defense in a future update.\n\n` +
+                    `Allocate point anyway?`
+                );
+                if (!confirmed) {
+                    return;
+                }
+            }
+
             const result = player.allocateAttribute(attrName, 1);
 
             if (result.success) {
