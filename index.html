@@ -24,6 +24,13 @@
                     </div>
                     <span id="quick-health-text">100/100</span>
                 </div>
+                <div class="quick-mana">
+                    <span class="quick-label">MP:</span>
+                    <div class="quick-bar-container">
+                        <div class="quick-bar mana-bar" id="quick-mana-bar"></div>
+                    </div>
+                    <span id="quick-mana-text">155/155</span>
+                </div>
                 <div class="quick-level">
                     Lv.<span id="quick-level">1</span>
                 </div>
@@ -95,6 +102,22 @@
                     </div>
 
                     <div class="stat-section">
+                        <h3>Mana</h3>
+                        <div class="stat-row">
+                            <span class="stat-label">MP:</span>
+                            <span class="stat-value" id="mana-text-detail">155/155</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Regen:</span>
+                            <span class="stat-value" id="mana-regen-text">3.0/sec</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">⚡ Spell Power:</span>
+                            <span class="stat-value" id="spell-power-text">0</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-section">
                         <h3>Combat Stats</h3>
                         <div class="stat-row">
                             <span class="stat-label">⚔️ Attack:</span>
@@ -145,16 +168,16 @@
 
                         <div class="attribute-row">
                             <span class="attr-icon">🔮</span>
-                            <span class="attr-name" title="Increases magic damage (future)">Intelligence</span>
+                            <span class="attr-name" title="Increases max mana and spell power">Intelligence</span>
                             <span class="attr-value" id="attr-intelligence">5/100</span>
-                            <button class="attr-btn" data-attr="intelligence" title="Allocate 1 point to Intelligence (magic damage - future)">+</button>
+                            <button class="attr-btn" data-attr="intelligence" title="Allocate 1 point to Intelligence (+10 max mana, +3 spell power)">+</button>
                         </div>
 
                         <div class="attribute-row">
                             <span class="attr-icon">📖</span>
-                            <span class="attr-name" title="Increases magic defense (future)">Wisdom</span>
+                            <span class="attr-name" title="Increases mana regeneration and magic defense">Wisdom</span>
                             <span class="attr-value" id="attr-wisdom">5/100</span>
-                            <button class="attr-btn" data-attr="wisdom" title="Allocate 1 point to Wisdom (magic defense - future)">+</button>
+                            <button class="attr-btn" data-attr="wisdom" title="Allocate 1 point to Wisdom (+0.2 mana regen/sec, +0.8 magic defense)">+</button>
                         </div>
 
                         <div class="attribute-row">
