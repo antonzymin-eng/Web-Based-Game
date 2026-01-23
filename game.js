@@ -5,6 +5,16 @@ const TILE_SIZE = 40;
 const GRID_WIDTH = CANVAS_WIDTH / TILE_SIZE;
 const GRID_HEIGHT = CANVAS_HEIGHT / TILE_SIZE;
 
+// Attribute System Constants
+const ATTRIBUTE_CAP = 100;
+const ATTRIBUTE_POINTS_PER_LEVEL = 3;
+const FUTURE_ATTRIBUTES = ['intelligence', 'wisdom'];
+const MAGIC_ATTR_WARNING_KEY = 'hasSeenMagicAttrWarning';
+
+// Combat Constants
+const ENEMY_ATTACK_COOLDOWN = 60;
+const DODGE_PARTICLE_COLOR = '#88ff88'; // Soft green for dodge visual feedback
+
 // Get canvas and context
 const canvas = document.getElementById('gameCanvas');
 if (!canvas) {
@@ -224,9 +234,9 @@ class Player {
             return { success: false, error: 'Invalid attribute name' };
         }
 
-        // Validation: Check if allocation would exceed cap (100)
-        if (this.attributes[attributeName] + points > 100) {
-            return { success: false, error: `Attribute would exceed maximum (100)` };
+        // Validation: Check if allocation would exceed cap
+        if (this.attributes[attributeName] + points > ATTRIBUTE_CAP) {
+            return { success: false, error: `Attribute would exceed maximum (${ATTRIBUTE_CAP})` };
         }
 
         // Allocate the points
@@ -471,8 +481,8 @@ class Player {
         this.xp -= this.xpNeeded;
         this.xpNeeded = Math.floor(this.xpNeeded * 1.5);
 
-        // Grant attribute points (3 per level)
-        this.attributePoints += 3;
+        // Grant attribute points for player allocation
+        this.attributePoints += ATTRIBUTE_POINTS_PER_LEVEL;
 
         // Small automatic base stat increases (reduced from before)
         this.baseMaxHealth += 5;  // Reduced from +20 (attributes provide more)
@@ -485,7 +495,7 @@ class Player {
         // Full heal on level up
         this.health = this.maxHealth;
 
-        showMessage(`LEVEL UP! Level ${this.level}! (+3 Attribute Points)`);
+        showMessage(`LEVEL UP! Lv.${this.level} (+${ATTRIBUTE_POINTS_PER_LEVEL} Pts)`);
         createParticles(this.x + this.width / 2, this.y + this.height / 2, '#ffd700', 20);
         updateUI();
 
@@ -664,14 +674,21 @@ class Enemy {
         return false;
     }
 
+    /**
+     * Attempt to attack the player
+     * Checks dodge chance before applying damage
+     * @param {Player} player - The player to attack
+     */
     tryAttack(player) {
         if (this.attackCooldown === 0) {
-            this.attackCooldown = 60;
+            // Set cooldown before dodge check so enemy's turn is consumed even if dodged
+            this.attackCooldown = ENEMY_ATTACK_COOLDOWN;
 
             // Check if player dodges the attack
-            if (Math.random() < player.dodgeChance) {
-                showMessage('You dodged!');
-                createParticles(player.x + player.width / 2, player.y + player.height / 2, '#00ff00', 8);
+            const dodgeChance = Math.max(0, Math.min(1, player.dodgeChance || 0));
+            if (Math.random() < dodgeChance) {
+                showMessage('Dodged!');
+                createParticles(player.x + player.width / 2, player.y + player.height / 2, DODGE_PARTICLE_COLOR, 8);
                 return;
             }
 
@@ -949,19 +966,19 @@ function updateUI() {
     // Update attribute points counter
     document.getElementById('attr-points-value').textContent = player.attributePoints;
 
-    // Update attribute values
-    document.getElementById('attr-strength').textContent = player.attributes.strength;
-    document.getElementById('attr-vitality').textContent = player.attributes.vitality;
-    document.getElementById('attr-dexterity').textContent = player.attributes.dexterity;
-    document.getElementById('attr-intelligence').textContent = player.attributes.intelligence;
-    document.getElementById('attr-wisdom').textContent = player.attributes.wisdom;
-    document.getElementById('attr-luck').textContent = player.attributes.luck;
+    // Update attribute values (showing current/max format)
+    document.getElementById('attr-strength').textContent = `${player.attributes.strength}/${ATTRIBUTE_CAP}`;
+    document.getElementById('attr-vitality').textContent = `${player.attributes.vitality}/${ATTRIBUTE_CAP}`;
+    document.getElementById('attr-dexterity').textContent = `${player.attributes.dexterity}/${ATTRIBUTE_CAP}`;
+    document.getElementById('attr-intelligence').textContent = `${player.attributes.intelligence}/${ATTRIBUTE_CAP}`;
+    document.getElementById('attr-wisdom').textContent = `${player.attributes.wisdom}/${ATTRIBUTE_CAP}`;
+    document.getElementById('attr-luck').textContent = `${player.attributes.luck}/${ATTRIBUTE_CAP}`;
 
     // Enable/disable attribute buttons based on available points
     const attrButtons = document.querySelectorAll('.attr-btn');
     attrButtons.forEach(btn => {
         const attrName = btn.getAttribute('data-attr');
-        const canAllocate = player.attributePoints > 0 && player.attributes[attrName] < 100;
+        const canAllocate = player.attributePoints > 0 && player.attributes[attrName] < ATTRIBUTE_CAP;
         btn.disabled = !canAllocate;
     });
 }
@@ -1670,32 +1687,101 @@ function setupCharacterMenu() {
         }
     });
 
+    /**
+     * Show custom confirmation modal for future attributes
+     * @param {string} attrName - Attribute name (intelligence or wisdom)
+     * @param {function} onConfirm - Callback if user confirms
+     */
+    function showAttributeWarning(attrName, onConfirm) {
+        const modal = document.getElementById('confirm-modal');
+        const message = document.getElementById('confirm-modal-message');
+        const confirmBtn = document.getElementById('confirm-modal-confirm');
+        const cancelBtn = document.getElementById('confirm-modal-cancel');
+
+        const attrDisplayName = attrName === 'intelligence' ? 'Intelligence' : 'Wisdom';
+        const effectType = attrName === 'intelligence' ? 'magic damage and mana' : 'magic defense and mana regeneration';
+
+        message.textContent = `${attrDisplayName} will be used for ${effectType} in a future update when the magic system is implemented. Allocate point anyway?`;
+
+        // Show modal
+        modal.classList.remove('hidden');
+        modal.setAttribute('aria-hidden', 'false');
+
+        // Handle confirm
+        const handleConfirm = () => {
+            cleanup();
+            onConfirm(true);
+        };
+
+        // Handle cancel
+        const handleCancel = () => {
+            cleanup();
+            onConfirm(false);
+        };
+
+        // Cleanup function
+        const cleanup = () => {
+            modal.classList.add('hidden');
+            modal.setAttribute('aria-hidden', 'true');
+            confirmBtn.removeEventListener('click', handleConfirm);
+            cancelBtn.removeEventListener('click', handleCancel);
+            modal.removeEventListener('click', handleClickOutside);
+        };
+
+        // Close on click outside
+        const handleClickOutside = (e) => {
+            if (e.target === modal) {
+                handleCancel();
+            }
+        };
+
+        confirmBtn.addEventListener('click', handleConfirm);
+        cancelBtn.addEventListener('click', handleCancel);
+        modal.addEventListener('click', handleClickOutside);
+    }
+
     // Attribute allocation buttons
     const attrButtons = document.querySelectorAll('.attr-btn');
     attrButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             const attrName = btn.getAttribute('data-attr');
 
-            // Warn about future attributes (INT/WIS)
-            if (attrName === 'intelligence' || attrName === 'wisdom') {
-                const attrDisplayName = attrName === 'intelligence' ? 'Intelligence' : 'Wisdom';
-                const confirmed = confirm(
-                    `⚠️ ${attrDisplayName} is not yet implemented.\n\n` +
-                    `It will affect magic damage/defense in a future update.\n\n` +
-                    `Allocate point anyway?`
-                );
-                if (!confirmed) {
+            // Warn about future attributes (INT/WIS) - only first time per session
+            if (FUTURE_ATTRIBUTES.includes(attrName)) {
+                const hasSeenWarning = sessionStorage.getItem(MAGIC_ATTR_WARNING_KEY);
+
+                if (!hasSeenWarning) {
+                    // Show warning and mark as seen
+                    sessionStorage.setItem(MAGIC_ATTR_WARNING_KEY, 'true');
+
+                    showAttributeWarning(attrName, (confirmed) => {
+                        if (confirmed) {
+                            allocateAttributePoint(attrName);
+                        }
+                    });
                     return;
                 }
             }
 
-            const result = player.allocateAttribute(attrName, 1);
+            // Allocate directly if no warning needed
+            allocateAttributePoint(attrName);
+        });
+    });
 
-            if (result.success) {
-                // Update UI
-                updateUI();
+    /**
+     * Allocate a single attribute point and provide visual feedback
+     * @param {string} attrName - Name of the attribute to increase
+     */
+    function allocateAttributePoint(attrName) {
+        const result = player.allocateAttribute(attrName, 1);
 
-                // Visual feedback - create particles
+        if (result.success) {
+            // Update UI
+            updateUI();
+
+            // Visual feedback - find the button for this attribute
+            const btn = document.querySelector(`[data-attr="${attrName}"]`);
+            if (btn) {
                 const rect = btn.getBoundingClientRect();
                 const centerX = rect.left + rect.width / 2;
                 const centerY = rect.top + rect.height / 2;
@@ -1724,12 +1810,12 @@ function setupCharacterMenu() {
                 setTimeout(() => {
                     document.body.removeChild(particle);
                 }, 600);
-            } else {
-                // Show error message
-                showMessage(result.error);
             }
-        });
-    });
+        } else {
+            // Show error message
+            showMessage(result.error);
+        }
+    }
 
     // Return close function for keyboard handler
     return { closeMenu, isOpen: () => !charMenu.classList.contains('hidden') };

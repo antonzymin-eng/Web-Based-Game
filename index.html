@@ -125,42 +125,42 @@
                         <div class="attribute-row">
                             <span class="attr-icon">💪</span>
                             <span class="attr-name" title="Increases attack damage">Strength</span>
-                            <span class="attr-value"><span id="attr-strength">5</span>/100</span>
+                            <span class="attr-value" id="attr-strength">5/100</span>
                             <button class="attr-btn" data-attr="strength" title="Allocate 1 point to Strength (+2 attack)">+</button>
                         </div>
 
                         <div class="attribute-row">
                             <span class="attr-icon">❤️</span>
                             <span class="attr-name" title="Increases max health and defense">Vitality</span>
-                            <span class="attr-value"><span id="attr-vitality">5</span>/100</span>
+                            <span class="attr-value" id="attr-vitality">5/100</span>
                             <button class="attr-btn" data-attr="vitality" title="Allocate 1 point to Vitality (+5 HP, +0.3 defense)">+</button>
                         </div>
 
                         <div class="attribute-row">
                             <span class="attr-icon">⚡</span>
                             <span class="attr-name" title="Increases crit chance, dodge, and attack speed">Dexterity</span>
-                            <span class="attr-value"><span id="attr-dexterity">5</span>/100</span>
+                            <span class="attr-value" id="attr-dexterity">5/100</span>
                             <button class="attr-btn" data-attr="dexterity" title="Allocate 1 point to Dexterity (+1% crit, +1% dodge, +2% attack speed)">+</button>
                         </div>
 
                         <div class="attribute-row">
                             <span class="attr-icon">🔮</span>
                             <span class="attr-name" title="Increases magic damage (future)">Intelligence</span>
-                            <span class="attr-value"><span id="attr-intelligence">5</span>/100</span>
+                            <span class="attr-value" id="attr-intelligence">5/100</span>
                             <button class="attr-btn" data-attr="intelligence" title="Allocate 1 point to Intelligence (magic damage - future)">+</button>
                         </div>
 
                         <div class="attribute-row">
                             <span class="attr-icon">📖</span>
                             <span class="attr-name" title="Increases magic defense (future)">Wisdom</span>
-                            <span class="attr-value"><span id="attr-wisdom">5</span>/100</span>
+                            <span class="attr-value" id="attr-wisdom">5/100</span>
                             <button class="attr-btn" data-attr="wisdom" title="Allocate 1 point to Wisdom (magic defense - future)">+</button>
                         </div>
 
                         <div class="attribute-row">
                             <span class="attr-icon">🍀</span>
                             <span class="attr-name" title="Increases crit chance and loot quality">Luck</span>
-                            <span class="attr-value"><span id="attr-luck">5</span>/100</span>
+                            <span class="attr-value" id="attr-luck">5/100</span>
                             <button class="attr-btn" data-attr="luck" title="Allocate 1 point to Luck (+1% crit, better loot - future)">+</button>
                         </div>
                     </div>
@@ -221,6 +221,22 @@
                             🗑️ Delete Save
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Custom Confirmation Modal -->
+        <div id="confirm-modal" class="confirm-modal hidden" role="dialog" aria-labelledby="confirm-modal-title" aria-modal="true" aria-hidden="true">
+            <div class="confirm-modal-content">
+                <div class="confirm-modal-header">
+                    <h3 id="confirm-modal-title">⚠️ Future Feature</h3>
+                </div>
+                <div class="confirm-modal-body">
+                    <p id="confirm-modal-message">This attribute is not yet implemented.</p>
+                </div>
+                <div class="confirm-modal-footer">
+                    <button id="confirm-modal-cancel" class="menu-btn" aria-label="Cancel">Cancel</button>
+                    <button id="confirm-modal-confirm" class="menu-btn save-btn" aria-label="Confirm">Allocate Anyway</button>
                 </div>
             </div>
         </div>
