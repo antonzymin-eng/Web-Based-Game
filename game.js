@@ -599,6 +599,7 @@ class Player {
 
         // Full heal on level up
         this.health = this.maxHealth;
+        this.mana = this.maxMana;  // Full mana restoration (Phase 1)
 
         showMessage(`LEVEL UP! Lv.${this.level} (+${ATTRIBUTE_POINTS_PER_LEVEL} Pts)`);
         createParticles(this.x + this.width / 2, this.y + this.height / 2, '#ffd700', 20);
@@ -645,6 +646,7 @@ class Player {
 
         // Full heal
         this.health = this.maxHealth;
+        this.mana = this.maxMana;  // Full mana restoration (Phase 1)
 
         gameState.enemiesDefeated = 0;
         gameState.chestsOpened = 0;
@@ -1327,6 +1329,7 @@ const SaveManager = {
                     xp: player.xp,
                     xpn: player.xpNeeded,
                     hp: player.health,
+                    mp: player.mana,  // Current mana (Phase 1)
                     // Base stats (foundation for computed stats)
                     bmhp: player.baseMaxHealth,
                     batk: player.baseAttack,
@@ -1447,6 +1450,9 @@ const SaveManager = {
 
             // Restore health
             player.health = saveData.p.hp;
+
+            // Restore mana (Phase 1 - with legacy save compatibility)
+            player.mana = saveData.p.mp !== undefined ? saveData.p.mp : player.maxMana;
 
             // Reset temporary combat state
             player.attackCooldown = 0;
