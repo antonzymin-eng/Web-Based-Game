@@ -231,7 +231,7 @@ body {
     align-items: center;
     position: relative;
     overflow: visible;
-    min-height: 0;
+    min-height: 400px;
 }
 
 #gameCanvas {
@@ -243,7 +243,6 @@ body {
     display: block;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
-    object-fit: contain;
 }
 
 /* Virtual Joystick - Bottom Left */
