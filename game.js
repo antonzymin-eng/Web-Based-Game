@@ -1634,6 +1634,9 @@ function updateUI() {
         const canAllocate = player.attributePoints > 0 && player.attributes[attrName] < ATTRIBUTE_CAP;
         btn.disabled = !canAllocate;
     });
+
+    // Update ability bar (Phase 3)
+    updateAbilityBar();
 }
 
 function updateZoomIndicator() {
@@ -2695,6 +2698,422 @@ function setupSaveMenu() {
     return { closeMenu, isOpen: () => !saveMenu.classList.contains('hidden') };
 }
 
+// ============================================================================
+// SECTION 6: ABILITY BAR & SPELLBOOK UI (Phase 3)
+// ============================================================================
+
+// Initialization guard to prevent multiple setup calls (High #2 fix)
+let isAbilityBarInitialized = false;
+
+/**
+ * Setup ability bar UI and event handlers
+ * Handles keyboard shortcuts (1-8), click to cast, long-press/right-click for spell assignment
+ */
+function setupAbilityBar() {
+    // Guard against multiple initialization
+    if (isAbilityBarInitialized) {
+        console.warn('[AbilityBar] Already initialized, skipping setup');
+        return;
+    }
+
+    const buttons = document.querySelectorAll('.ability-btn');
+
+    if (buttons.length === 0) {
+        console.error('[AbilityBar] Ability buttons not found!');
+        return;
+    }
+
+    // Track long-press state for mobile
+    const pressState = new Map();
+
+    buttons.forEach((btn, index) => {
+        // Click to cast spell
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+
+            // Don't cast if this was a long-press
+            const state = pressState.get(btn);
+            if (state && state.isLongPress) {
+                state.isLongPress = false;
+                return;
+            }
+
+            const spellId = player.hotbar[index];
+            if (spellId) {
+                MagicManager.beginCast(spellId, player);
+            } else {
+                showMessage('Empty slot - long-press or right-click to assign');
+            }
+        });
+
+        // Long-press for mobile (500ms)
+        btn.addEventListener('touchstart', (e) => {
+            // Prevent context menu on long-press (High #6 fix)
+            e.preventDefault();
+
+            const state = { isLongPress: false, timer: null };
+            pressState.set(btn, state);
+
+            state.timer = setTimeout(() => {
+                state.isLongPress = true;
+                openSpellbookForSlot(index);
+
+                // Haptic feedback if available
+                if (navigator.vibrate) {
+                    navigator.vibrate(50);
+                }
+            }, 500);
+        });
+
+        btn.addEventListener('touchend', (e) => {
+            const state = pressState.get(btn);
+            if (state && state.timer) {
+                clearTimeout(state.timer);
+            }
+            // Reset isLongPress flag and clean up Map (Critical #3 fix)
+            setTimeout(() => {
+                if (state) state.isLongPress = false;
+                pressState.delete(btn); // Clean up to prevent memory leak
+            }, 100);
+        });
+
+        btn.addEventListener('touchmove', (e) => {
+            // Cancel long-press if finger moves
+            const state = pressState.get(btn);
+            if (state && state.timer) {
+                clearTimeout(state.timer);
+                // Also clean up Map since long-press was cancelled
+                pressState.delete(btn);
+            }
+        });
+
+        // Right-click for desktop
+        btn.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            openSpellbookForSlot(index);
+        });
+    });
+
+    // Note: Keyboard shortcuts (1-8) are handled by global keydown listener at line 2176
+    // No need to add duplicate handler here
+
+    // Initial update of ability bar UI
+    updateAbilityBar();
+
+    // Mark as initialized
+    isAbilityBarInitialized = true;
+
+    console.log('[UI] Ability bar setup complete');
+}
+
+/**
+ * Update ability bar UI to reflect current hotbar, cooldowns, and mana
+ * Called from updateUI() and during game loop
+ * Uses cached DOM queries for performance (60 FPS optimization)
+ */
+const updateAbilityBar = (() => {
+    // Cache DOM elements to avoid 960+ queries per second
+    let cachedButtons = null;
+
+    function getCachedButtons() {
+        if (!cachedButtons || cachedButtons.length === 0) {
+            const buttons = document.querySelectorAll('.ability-btn');
+            if (buttons.length === 0) {
+                return null;
+            }
+
+            // Cache buttons and their child elements
+            cachedButtons = Array.from(buttons).map((btn, index) => ({
+                btn,
+                icon: btn.querySelector('.ability-icon'),
+                cooldownOverlay: btn.querySelector('.ability-cooldown'),
+                index
+            }));
+        }
+        return cachedButtons;
+    }
+
+    return function() {
+        // Guard clause: Check if player is initialized
+        if (!player || !player.hotbar || !Array.isArray(player.hotbar)) {
+            return;
+        }
+
+        // Guard clause: Check if DOM elements exist
+        const buttonData = getCachedButtons();
+        if (!buttonData) {
+            return;
+        }
+
+        buttonData.forEach(({ btn, icon, cooldownOverlay, index }) => {
+            // Defensive check: Ensure child elements exist
+            if (!icon || !cooldownOverlay) {
+                console.error(`[AbilityBar] Missing child elements in button ${index}`);
+                return;
+            }
+
+            const spellId = player.hotbar[index];
+
+            if (spellId && ABILITIES[spellId]) {
+            const ability = ABILITIES[spellId];
+
+            // Set icon
+            icon.textContent = ability.icon;
+
+            // Add has-spell class
+            btn.classList.add('has-spell');
+            btn.classList.remove('empty');
+
+            // Check cooldown
+            const cooldownPercent = MagicManager.getCooldownPercent(spellId);
+            const globalCDPercent = MagicManager.getGlobalCooldownPercent();
+            const maxCooldownPercent = Math.max(cooldownPercent, globalCDPercent);
+
+            if (maxCooldownPercent > 0) {
+                btn.classList.add('on-cooldown');
+                cooldownOverlay.style.height = `${maxCooldownPercent}%`;
+
+                // Add cooldown text
+                let existingText = btn.querySelector('.cooldown-text');
+                if (!existingText) {
+                    existingText = document.createElement('span');
+                    existingText.className = 'cooldown-text';
+                    btn.appendChild(existingText);
+                }
+
+                const remainingTime = Math.max(
+                    MagicManager.state.spellCooldowns[spellId] || 0,
+                    MagicManager.state.globalCooldown || 0
+                );
+                existingText.textContent = (remainingTime / 1000).toFixed(1);
+            } else {
+                btn.classList.remove('on-cooldown');
+                cooldownOverlay.style.height = '0%';
+
+                // Remove cooldown text
+                const existingText = btn.querySelector('.cooldown-text');
+                if (existingText) {
+                    existingText.remove();
+                }
+            }
+
+            // Check mana availability
+            const canCast = MagicManager.canCast(spellId, player);
+            if (!canCast.canCast && canCast.reason.includes('mana')) {
+                btn.style.opacity = '0.5';
+            } else if (!btn.classList.contains('on-cooldown')) {
+                btn.style.opacity = '1';
+            }
+
+        } else {
+            // Empty slot
+            icon.textContent = '';
+            btn.classList.remove('has-spell', 'on-cooldown');
+            btn.classList.add('empty');
+            cooldownOverlay.style.height = '0%';
+            btn.style.opacity = '1';
+
+            // Remove cooldown text if present
+            const existingText = btn.querySelector('.cooldown-text');
+            if (existingText) {
+                existingText.remove();
+            }
+        }
+        });
+    };
+})();
+
+/**
+ * Open spellbook modal for assigning spells to a specific slot
+ * @param {number} slotIndex - Hotbar slot index (0-7)
+ */
+function openSpellbookForSlot(slotIndex) {
+    const modal = document.getElementById('spellbook-modal');
+    const slotNumber = document.getElementById('spellbook-slot-number');
+    const grid = document.getElementById('spellbook-grid');
+
+    if (!modal || !slotNumber || !grid) {
+        console.error('[Spellbook] Modal elements not found!');
+        return;
+    }
+
+    // Validate ABILITIES exists (High #4 fix)
+    if (!ABILITIES || typeof ABILITIES !== 'object') {
+        console.error('[Spellbook] ABILITIES not defined');
+        showMessage('Error: Spell data not loaded');
+        return;
+    }
+
+    // Validate player data (High #4 fix)
+    if (!player || !player.unlockedSpells || !player.hotbar) {
+        console.error('[Spellbook] Player data not initialized');
+        showMessage('Error: Player data not ready');
+        return;
+    }
+
+    // Store current slot being edited
+    modal.dataset.editingSlot = slotIndex;
+
+    // Update slot number display
+    slotNumber.textContent = slotIndex + 1;
+
+    // Clear and populate spell grid
+    grid.innerHTML = '';
+
+    Object.values(ABILITIES).forEach(ability => {
+        const card = document.createElement('div');
+        card.className = 'spell-card';
+
+        // Check if spell is unlocked
+        const isUnlocked = player.unlockedSpells.includes(ability.id);
+        const isAssigned = player.hotbar.includes(ability.id);
+
+        if (!isUnlocked) {
+            card.classList.add('locked');
+        }
+
+        if (isAssigned) {
+            card.classList.add('assigned');
+        }
+
+        // Create card content
+        card.innerHTML = `
+            <div class="spell-card-icon">${ability.icon}</div>
+            <div class="spell-card-name">${ability.name}</div>
+            <div class="spell-card-stats">
+                <span class="spell-card-cost">${ability.manaCost} MP</span>
+                <span class="spell-card-cooldown">${ability.cooldown / 1000}s CD</span>
+            </div>
+            <div class="spell-card-desc">${ability.description}</div>
+            ${!isUnlocked ? `<div class="spell-card-unlock">Unlocks at Level ${ability.unlockLevel}</div>` : ''}
+        `;
+
+        // Click handler to assign spell
+        if (isUnlocked) {
+            card.addEventListener('click', () => {
+                assignSpellToSlot(ability.id, slotIndex);
+                closeSpellbook();
+            });
+        }
+
+        grid.appendChild(card);
+    });
+
+    // Show modal
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+}
+
+/**
+ * Assign a spell to a hotbar slot
+ * @param {string} spellId - Spell ID to assign
+ * @param {number} slotIndex - Hotbar slot index (0-7)
+ */
+function assignSpellToSlot(spellId, slotIndex) {
+    // Validate spell ID (High #3 fix)
+    if (!spellId || typeof spellId !== 'string') {
+        console.error(`[AbilityBar] Invalid spell ID: ${spellId}`);
+        showMessage('Error: Invalid spell');
+        return;
+    }
+
+    if (!ABILITIES[spellId]) {
+        console.error(`[AbilityBar] Spell not found in ABILITIES: ${spellId}`);
+        showMessage('Error: Spell not found');
+        return;
+    }
+
+    // Validate slot index (High #3 fix)
+    if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= 8) {
+        console.error(`[AbilityBar] Invalid slot index: ${slotIndex}`);
+        showMessage('Error: Invalid slot number');
+        return;
+    }
+
+    // Validate player hotbar (High #3 fix)
+    if (!player || !player.hotbar || !Array.isArray(player.hotbar)) {
+        console.error('[AbilityBar] Player hotbar not initialized');
+        showMessage('Error: Hotbar not ready');
+        return;
+    }
+
+    // Remove spell from other slots if it's already assigned
+    for (let i = 0; i < player.hotbar.length; i++) {
+        if (player.hotbar[i] === spellId) {
+            player.hotbar[i] = null;
+        }
+    }
+
+    // Assign to new slot
+    player.hotbar[slotIndex] = spellId;
+
+    // Update UI
+    updateAbilityBar();
+    updateUI();
+
+    const ability = ABILITIES[spellId];
+    showMessage(`${ability.name} assigned to slot ${slotIndex + 1}`);
+}
+
+/**
+ * Clear a hotbar slot
+ * @param {number} slotIndex - Hotbar slot index (0-7)
+ */
+function clearHotbarSlot(slotIndex) {
+    player.hotbar[slotIndex] = null;
+    updateAbilityBar();
+    updateUI();
+    showMessage(`Slot ${slotIndex + 1} cleared`);
+}
+
+/**
+ * Close spellbook modal
+ */
+function closeSpellbook() {
+    const modal = document.getElementById('spellbook-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+}
+
+/**
+ * Setup spellbook modal event handlers
+ */
+function setupSpellbook() {
+    const modal = document.getElementById('spellbook-modal');
+    const closeBtn = document.getElementById('spellbook-modal-close');
+    const clearBtn = document.getElementById('spellbook-clear-btn');
+
+    if (!modal || !closeBtn || !clearBtn) {
+        console.error('[Spellbook] Modal elements not found!');
+        return;
+    }
+
+    // Close button
+    closeBtn.addEventListener('click', closeSpellbook);
+
+    // Clear slot button
+    clearBtn.addEventListener('click', () => {
+        const slotIndex = parseInt(modal.dataset.editingSlot);
+        if (!isNaN(slotIndex)) {
+            clearHotbarSlot(slotIndex);
+            closeSpellbook();
+        }
+    });
+
+    // Close when clicking outside
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeSpellbook();
+        }
+    });
+
+    // ESC key to close (handled by unified keyboard handler in initGame)
+
+    console.log('[UI] Spellbook setup complete');
+}
+
 // Update save menu info display (cached DOM queries for performance)
 const updateSaveMenuInfo = (() => {
     // Cache DOM elements on first call
@@ -3105,10 +3524,19 @@ function initGame() {
     // Initialize magic system (Phase 2)
     MagicManager.init();
 
+    // Setup ability bar and spellbook (Phase 3)
+    setupAbilityBar();
+    setupSpellbook();
+
     // Unified keyboard handler for ESC key (closes any open menu)
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            if (charMenuHandler && charMenuHandler.isOpen()) {
+            const spellbookModal = document.getElementById('spellbook-modal');
+            const isSpellbookOpen = spellbookModal && !spellbookModal.classList.contains('hidden');
+
+            if (isSpellbookOpen) {
+                closeSpellbook();
+            } else if (charMenuHandler && charMenuHandler.isOpen()) {
                 charMenuHandler.closeMenu();
             } else if (saveMenuHandler && saveMenuHandler.isOpen()) {
                 saveMenuHandler.closeMenu();

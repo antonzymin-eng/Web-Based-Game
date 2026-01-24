@@ -58,6 +58,50 @@
             </div>
         </div>
 
+        <!-- Ability Bar - Bottom Center (Phase 3) -->
+        <div class="ability-bar">
+            <button class="ability-btn" data-slot="0" aria-label="Ability slot 1">
+                <span class="ability-icon"></span>
+                <span class="ability-key">1</span>
+                <div class="ability-cooldown"></div>
+            </button>
+            <button class="ability-btn" data-slot="1" aria-label="Ability slot 2">
+                <span class="ability-icon"></span>
+                <span class="ability-key">2</span>
+                <div class="ability-cooldown"></div>
+            </button>
+            <button class="ability-btn" data-slot="2" aria-label="Ability slot 3">
+                <span class="ability-icon"></span>
+                <span class="ability-key">3</span>
+                <div class="ability-cooldown"></div>
+            </button>
+            <button class="ability-btn" data-slot="3" aria-label="Ability slot 4">
+                <span class="ability-icon"></span>
+                <span class="ability-key">4</span>
+                <div class="ability-cooldown"></div>
+            </button>
+            <button class="ability-btn" data-slot="4" aria-label="Ability slot 5">
+                <span class="ability-icon"></span>
+                <span class="ability-key">5</span>
+                <div class="ability-cooldown"></div>
+            </button>
+            <button class="ability-btn" data-slot="5" aria-label="Ability slot 6">
+                <span class="ability-icon"></span>
+                <span class="ability-key">6</span>
+                <div class="ability-cooldown"></div>
+            </button>
+            <button class="ability-btn" data-slot="6" aria-label="Ability slot 7">
+                <span class="ability-icon"></span>
+                <span class="ability-key">7</span>
+                <div class="ability-cooldown"></div>
+            </button>
+            <button class="ability-btn" data-slot="7" aria-label="Ability slot 8">
+                <span class="ability-icon"></span>
+                <span class="ability-key">8</span>
+                <div class="ability-cooldown"></div>
+            </button>
+        </div>
+
         <!-- Action Buttons - Bottom Right -->
         <div class="action-controls">
             <button id="btn-target" class="action-btn target-btn" aria-label="Cycle target">🎯</button>
@@ -260,6 +304,28 @@
                 <div class="confirm-modal-footer">
                     <button id="confirm-modal-cancel" class="menu-btn" aria-label="Cancel">Cancel</button>
                     <button id="confirm-modal-confirm" class="menu-btn save-btn" aria-label="Confirm">Allocate Anyway</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Spellbook Modal (Phase 3) -->
+        <div id="spellbook-modal" class="spellbook-modal hidden" role="dialog" aria-labelledby="spellbook-modal-title" aria-modal="true" aria-hidden="true">
+            <div class="spellbook-modal-content">
+                <div class="spellbook-modal-header">
+                    <h2 id="spellbook-modal-title">📖 Spellbook</h2>
+                    <button id="spellbook-modal-close" class="close-btn" aria-label="Close spellbook">✕</button>
+                </div>
+                <div class="spellbook-modal-body">
+                    <div class="spellbook-info">
+                        <p>Assigning spell to slot <span id="spellbook-slot-number">1</span></p>
+                        <p class="spellbook-hint">Click a spell to assign it, or click "Clear Slot" to remove the current ability.</p>
+                    </div>
+                    <div class="spellbook-grid" id="spellbook-grid">
+                        <!-- Spell buttons will be dynamically generated here -->
+                    </div>
+                    <div class="spellbook-actions">
+                        <button id="spellbook-clear-btn" class="menu-btn warning-btn">Clear Slot</button>
+                    </div>
                 </div>
             </div>
         </div>
