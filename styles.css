@@ -55,6 +55,7 @@ body {
     flex-direction: column;
     background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
     position: relative;
+    z-index: 0;
 }
 
 /* Top HUD */
@@ -233,6 +234,7 @@ body {
     overflow: hidden;
     min-height: 500px;
     width: 100%;
+    z-index: 1;
 }
 
 #gameCanvas {
@@ -244,6 +246,8 @@ body {
     display: block;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
+    position: relative;
+    z-index: 5;
 }
 
 /* Virtual Joystick - Bottom Left */
