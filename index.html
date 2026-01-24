@@ -51,63 +51,6 @@
             <canvas id="gameCanvas"></canvas>
         </div>
 
-        <!-- Virtual Joystick - Bottom Left -->
-        <div class="joystick-container">
-            <div id="joystick-base" class="joystick-base">
-                <div id="joystick-stick" class="joystick-stick"></div>
-            </div>
-        </div>
-
-        <!-- Ability Bar - Bottom Center (Phase 3) -->
-        <div class="ability-bar">
-            <button class="ability-btn" data-slot="0" aria-label="Ability slot 1">
-                <span class="ability-icon"></span>
-                <span class="ability-key">1</span>
-                <div class="ability-cooldown"></div>
-            </button>
-            <button class="ability-btn" data-slot="1" aria-label="Ability slot 2">
-                <span class="ability-icon"></span>
-                <span class="ability-key">2</span>
-                <div class="ability-cooldown"></div>
-            </button>
-            <button class="ability-btn" data-slot="2" aria-label="Ability slot 3">
-                <span class="ability-icon"></span>
-                <span class="ability-key">3</span>
-                <div class="ability-cooldown"></div>
-            </button>
-            <button class="ability-btn" data-slot="3" aria-label="Ability slot 4">
-                <span class="ability-icon"></span>
-                <span class="ability-key">4</span>
-                <div class="ability-cooldown"></div>
-            </button>
-            <button class="ability-btn" data-slot="4" aria-label="Ability slot 5">
-                <span class="ability-icon"></span>
-                <span class="ability-key">5</span>
-                <div class="ability-cooldown"></div>
-            </button>
-            <button class="ability-btn" data-slot="5" aria-label="Ability slot 6">
-                <span class="ability-icon"></span>
-                <span class="ability-key">6</span>
-                <div class="ability-cooldown"></div>
-            </button>
-            <button class="ability-btn" data-slot="6" aria-label="Ability slot 7">
-                <span class="ability-icon"></span>
-                <span class="ability-key">7</span>
-                <div class="ability-cooldown"></div>
-            </button>
-            <button class="ability-btn" data-slot="7" aria-label="Ability slot 8">
-                <span class="ability-icon"></span>
-                <span class="ability-key">8</span>
-                <div class="ability-cooldown"></div>
-            </button>
-        </div>
-
-        <!-- Action Buttons - Bottom Right -->
-        <div class="action-controls">
-            <button id="btn-target" class="action-btn target-btn" aria-label="Cycle target">🎯</button>
-            <button id="btn-attack" class="action-btn attack-btn" aria-label="Attack enemy">⚔️</button>
-        </div>
-
         <!-- Character Menu Modal -->
         <div id="char-menu" class="char-menu hidden" role="dialog" aria-labelledby="char-menu-title" aria-modal="true" aria-hidden="true">
             <div class="char-menu-content">
@@ -329,6 +272,65 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Fixed UI Elements (Outside game-container to prevent layout interference) -->
+
+    <!-- Virtual Joystick - Bottom Left -->
+    <div class="joystick-container">
+        <div id="joystick-base" class="joystick-base">
+            <div id="joystick-stick" class="joystick-stick"></div>
+        </div>
+    </div>
+
+    <!-- Ability Bar - Bottom Center (Phase 3) -->
+    <div class="ability-bar">
+        <button class="ability-btn" data-slot="0" aria-label="Ability slot 1">
+            <span class="ability-icon"></span>
+            <span class="ability-key">1</span>
+            <div class="ability-cooldown"></div>
+        </button>
+        <button class="ability-btn" data-slot="1" aria-label="Ability slot 2">
+            <span class="ability-icon"></span>
+            <span class="ability-key">2</span>
+            <div class="ability-cooldown"></div>
+        </button>
+        <button class="ability-btn" data-slot="2" aria-label="Ability slot 3">
+            <span class="ability-icon"></span>
+            <span class="ability-key">3</span>
+            <div class="ability-cooldown"></div>
+        </button>
+        <button class="ability-btn" data-slot="3" aria-label="Ability slot 4">
+            <span class="ability-icon"></span>
+            <span class="ability-key">4</span>
+            <div class="ability-cooldown"></div>
+        </button>
+        <button class="ability-btn" data-slot="4" aria-label="Ability slot 5">
+            <span class="ability-icon"></span>
+            <span class="ability-key">5</span>
+            <div class="ability-cooldown"></div>
+        </button>
+        <button class="ability-btn" data-slot="5" aria-label="Ability slot 6">
+            <span class="ability-icon"></span>
+            <span class="ability-key">6</span>
+            <div class="ability-cooldown"></div>
+        </button>
+        <button class="ability-btn" data-slot="6" aria-label="Ability slot 7">
+            <span class="ability-icon"></span>
+            <span class="ability-key">7</span>
+            <div class="ability-cooldown"></div>
+        </button>
+        <button class="ability-btn" data-slot="7" aria-label="Ability slot 8">
+            <span class="ability-icon"></span>
+            <span class="ability-key">8</span>
+            <div class="ability-cooldown"></div>
+        </button>
+    </div>
+
+    <!-- Action Buttons - Bottom Right -->
+    <div class="action-controls">
+        <button id="btn-target" class="action-btn target-btn" aria-label="Cycle target">🎯</button>
+        <button id="btn-attack" class="action-btn attack-btn" aria-label="Attack enemy">⚔️</button>
     </div>
 
     <script src="game.js"></script>
