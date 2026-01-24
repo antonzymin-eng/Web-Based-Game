@@ -1018,6 +1018,7 @@ body {
     transition: all 0.15s ease;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none; /* Prevent iOS context menu on long-press (High #6 fix) */
     touch-action: manipulation;
     display: flex;
     align-items: center;
@@ -1145,9 +1146,11 @@ body {
         padding: 0px 2px;
     }
 
-    /* Move action buttons up on mobile to avoid overlap */
+    /* Move action buttons up on mobile to avoid overlap (High #5 fix: reduced from 230px to 215px) */
+    /* Ability bar is ~106px tall starting at 100px, so top is at ~206px */
+    /* 215px provides ~9px spacing while keeping buttons more reachable */
     .action-controls {
-        bottom: calc(env(safe-area-inset-bottom, 0px) + 230px); /* Increased from original */
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 215px);
     }
 }
 

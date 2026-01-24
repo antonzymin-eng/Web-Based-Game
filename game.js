@@ -2702,11 +2702,20 @@ function setupSaveMenu() {
 // SECTION 6: ABILITY BAR & SPELLBOOK UI (Phase 3)
 // ============================================================================
 
+// Initialization guard to prevent multiple setup calls (High #2 fix)
+let isAbilityBarInitialized = false;
+
 /**
  * Setup ability bar UI and event handlers
  * Handles keyboard shortcuts (1-8), click to cast, long-press/right-click for spell assignment
  */
 function setupAbilityBar() {
+    // Guard against multiple initialization
+    if (isAbilityBarInitialized) {
+        console.warn('[AbilityBar] Already initialized, skipping setup');
+        return;
+    }
+
     const buttons = document.querySelectorAll('.ability-btn');
 
     if (buttons.length === 0) {
@@ -2739,6 +2748,9 @@ function setupAbilityBar() {
 
         // Long-press for mobile (500ms)
         btn.addEventListener('touchstart', (e) => {
+            // Prevent context menu on long-press (High #6 fix)
+            e.preventDefault();
+
             const state = { isLongPress: false, timer: null };
             pressState.set(btn, state);
 
@@ -2758,9 +2770,10 @@ function setupAbilityBar() {
             if (state && state.timer) {
                 clearTimeout(state.timer);
             }
-            // Reset isLongPress flag after a short delay to prevent accidental cast
+            // Reset isLongPress flag and clean up Map (Critical #3 fix)
             setTimeout(() => {
                 if (state) state.isLongPress = false;
+                pressState.delete(btn); // Clean up to prevent memory leak
             }, 100);
         });
 
@@ -2769,6 +2782,8 @@ function setupAbilityBar() {
             const state = pressState.get(btn);
             if (state && state.timer) {
                 clearTimeout(state.timer);
+                // Also clean up Map since long-press was cancelled
+                pressState.delete(btn);
             }
         });
 
@@ -2779,29 +2794,14 @@ function setupAbilityBar() {
         });
     });
 
-    // Keyboard shortcuts (1-8)
-    document.addEventListener('keydown', (e) => {
-        // Check if player and hotbar are valid
-        if (!player || !player.hotbar || !Array.isArray(player.hotbar)) {
-            return;
-        }
-
-        const keyNum = parseInt(e.key);
-        if (!isNaN(keyNum) && keyNum >= 1 && keyNum <= 8) {
-            const slotIndex = keyNum - 1;
-            const spellId = player.hotbar[slotIndex];
-            if (spellId) {
-                MagicManager.beginCast(spellId, player);
-            } else {
-                showMessage(`Slot ${keyNum} is empty`);
-            }
-        }
-
-        // ESC to cancel targeting (handled by MagicManager, but we can add UI feedback here)
-    });
+    // Note: Keyboard shortcuts (1-8) are handled by global keydown listener at line 2176
+    // No need to add duplicate handler here
 
     // Initial update of ability bar UI
     updateAbilityBar();
+
+    // Mark as initialized
+    isAbilityBarInitialized = true;
 
     console.log('[UI] Ability bar setup complete');
 }
@@ -2809,16 +2809,52 @@ function setupAbilityBar() {
 /**
  * Update ability bar UI to reflect current hotbar, cooldowns, and mana
  * Called from updateUI() and during game loop
+ * Uses cached DOM queries for performance (60 FPS optimization)
  */
-function updateAbilityBar() {
-    const buttons = document.querySelectorAll('.ability-btn');
+const updateAbilityBar = (() => {
+    // Cache DOM elements to avoid 960+ queries per second
+    let cachedButtons = null;
 
-    buttons.forEach((btn, index) => {
-        const spellId = player.hotbar[index];
-        const icon = btn.querySelector('.ability-icon');
-        const cooldownOverlay = btn.querySelector('.ability-cooldown');
+    function getCachedButtons() {
+        if (!cachedButtons || cachedButtons.length === 0) {
+            const buttons = document.querySelectorAll('.ability-btn');
+            if (buttons.length === 0) {
+                return null;
+            }
 
-        if (spellId && ABILITIES[spellId]) {
+            // Cache buttons and their child elements
+            cachedButtons = Array.from(buttons).map((btn, index) => ({
+                btn,
+                icon: btn.querySelector('.ability-icon'),
+                cooldownOverlay: btn.querySelector('.ability-cooldown'),
+                index
+            }));
+        }
+        return cachedButtons;
+    }
+
+    return function() {
+        // Guard clause: Check if player is initialized
+        if (!player || !player.hotbar || !Array.isArray(player.hotbar)) {
+            return;
+        }
+
+        // Guard clause: Check if DOM elements exist
+        const buttonData = getCachedButtons();
+        if (!buttonData) {
+            return;
+        }
+
+        buttonData.forEach(({ btn, icon, cooldownOverlay, index }) => {
+            // Defensive check: Ensure child elements exist
+            if (!icon || !cooldownOverlay) {
+                console.error(`[AbilityBar] Missing child elements in button ${index}`);
+                return;
+            }
+
+            const spellId = player.hotbar[index];
+
+            if (spellId && ABILITIES[spellId]) {
             const ability = ABILITIES[spellId];
 
             // Set icon
@@ -2883,8 +2919,9 @@ function updateAbilityBar() {
                 existingText.remove();
             }
         }
-    });
-}
+        });
+    };
+})();
 
 /**
  * Open spellbook modal for assigning spells to a specific slot
@@ -2897,6 +2934,20 @@ function openSpellbookForSlot(slotIndex) {
 
     if (!modal || !slotNumber || !grid) {
         console.error('[Spellbook] Modal elements not found!');
+        return;
+    }
+
+    // Validate ABILITIES exists (High #4 fix)
+    if (!ABILITIES || typeof ABILITIES !== 'object') {
+        console.error('[Spellbook] ABILITIES not defined');
+        showMessage('Error: Spell data not loaded');
+        return;
+    }
+
+    // Validate player data (High #4 fix)
+    if (!player || !player.unlockedSpells || !player.hotbar) {
+        console.error('[Spellbook] Player data not initialized');
+        showMessage('Error: Player data not ready');
         return;
     }
 
@@ -2959,6 +3010,33 @@ function openSpellbookForSlot(slotIndex) {
  * @param {number} slotIndex - Hotbar slot index (0-7)
  */
 function assignSpellToSlot(spellId, slotIndex) {
+    // Validate spell ID (High #3 fix)
+    if (!spellId || typeof spellId !== 'string') {
+        console.error(`[AbilityBar] Invalid spell ID: ${spellId}`);
+        showMessage('Error: Invalid spell');
+        return;
+    }
+
+    if (!ABILITIES[spellId]) {
+        console.error(`[AbilityBar] Spell not found in ABILITIES: ${spellId}`);
+        showMessage('Error: Spell not found');
+        return;
+    }
+
+    // Validate slot index (High #3 fix)
+    if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= 8) {
+        console.error(`[AbilityBar] Invalid slot index: ${slotIndex}`);
+        showMessage('Error: Invalid slot number');
+        return;
+    }
+
+    // Validate player hotbar (High #3 fix)
+    if (!player || !player.hotbar || !Array.isArray(player.hotbar)) {
+        console.error('[AbilityBar] Player hotbar not initialized');
+        showMessage('Error: Hotbar not ready');
+        return;
+    }
+
     // Remove spell from other slots if it's already assigned
     for (let i = 0; i < player.hotbar.length; i++) {
         if (player.hotbar[i] === spellId) {
