@@ -986,3 +986,381 @@ body {
         width: 100%;
     }
 }
+
+/* ========================================
+   PHASE 3: ABILITY BAR & SPELLBOOK UI
+   ======================================== */
+
+/* Ability Bar - Bottom Center */
+.ability-bar {
+    position: fixed;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 50;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: 1fr;
+    gap: 8px;
+    max-width: 568px; /* 8 × 64px + 7 × 8px gaps = 568px */
+    pointer-events: auto;
+}
+
+/* Ability Button */
+.ability-btn {
+    width: 64px;
+    height: 64px;
+    border-radius: 8px;
+    background: linear-gradient(145deg, rgba(44, 62, 80, 0.95), rgba(52, 73, 94, 0.95));
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    position: relative;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+}
+
+.ability-btn:hover {
+    border-color: rgba(255, 215, 0, 0.6);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.7);
+}
+
+.ability-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* Ability button with spell assigned */
+.ability-btn.has-spell {
+    border-color: rgba(76, 175, 80, 0.7);
+    background: linear-gradient(145deg, rgba(76, 175, 80, 0.2), rgba(56, 142, 60, 0.2));
+}
+
+.ability-btn.has-spell:hover {
+    border-color: rgba(255, 215, 0, 0.8);
+}
+
+/* Ability button on cooldown */
+.ability-btn.on-cooldown {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.ability-btn.on-cooldown:hover {
+    transform: none;
+    border-color: rgba(255, 0, 0, 0.5);
+}
+
+/* Empty slot */
+.ability-btn.empty .ability-icon::before {
+    content: '+';
+    font-size: 2em;
+    color: rgba(255, 255, 255, 0.3);
+    font-weight: bold;
+}
+
+/* Ability Icon */
+.ability-icon {
+    font-size: 2em;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+/* Ability Key Indicator */
+.ability-key {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 2px 4px;
+    border-radius: 3px;
+    pointer-events: none;
+}
+
+/* Cooldown Overlay */
+.ability-cooldown {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 0%;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 5px;
+    transition: height 0.1s linear;
+    pointer-events: none;
+}
+
+/* Cooldown text */
+.ability-btn .cooldown-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #fff;
+    font-size: 1.2em;
+    font-weight: bold;
+    text-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Mobile: 2 rows × 4 columns, positioned right */
+@media (max-width: 480px) {
+    .ability-bar {
+        grid-template-columns: repeat(4, 1fr);
+        grid-template-rows: repeat(2, 1fr);
+        max-width: 218px; /* CORRECTED: 4 × 50px + 3 × 6px gaps = 218px */
+        gap: 6px;
+        right: calc(env(safe-area-inset-right, 0px) + 10px);
+        left: auto;
+        transform: none;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 100px);
+    }
+
+    .ability-btn {
+        width: 50px;
+        height: 50px;
+        font-size: 20px;
+        border-width: 2px;
+    }
+
+    .ability-icon {
+        font-size: 1.5em;
+    }
+
+    .ability-key {
+        font-size: 8px;
+        padding: 0px 2px;
+    }
+
+    /* Move action buttons up on mobile to avoid overlap */
+    .action-controls {
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 230px); /* Increased from original */
+    }
+}
+
+/* Spellbook Modal */
+.spellbook-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 200;
+    transition: opacity 0.3s ease;
+    pointer-events: auto;
+}
+
+.spellbook-modal.hidden {
+    display: none;
+}
+
+.spellbook-modal-content {
+    background: linear-gradient(145deg, #2c3e50, #34495e);
+    border: 3px solid #9c27b0;
+    border-radius: 15px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+}
+
+.spellbook-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: rgba(0, 0, 0, 0.3);
+    border-bottom: 2px solid #9c27b0;
+}
+
+.spellbook-modal-header h2 {
+    color: #9c27b0;
+    font-size: 1.5em;
+    margin: 0;
+}
+
+.spellbook-modal-body {
+    padding: 20px;
+}
+
+.spellbook-info {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(156, 39, 176, 0.3);
+}
+
+.spellbook-info p {
+    color: #ecf0f1;
+    margin: 5px 0;
+    font-size: 1em;
+}
+
+.spellbook-info p:first-child {
+    font-weight: bold;
+    color: #9c27b0;
+    font-size: 1.1em;
+}
+
+#spellbook-slot-number {
+    color: #FFD700;
+    font-weight: bold;
+}
+
+.spellbook-hint {
+    color: #bdc3c7;
+    font-size: 0.9em;
+    font-style: italic;
+}
+
+/* Spellbook Grid */
+.spellbook-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+/* Spell Card */
+.spell-card {
+    background: linear-gradient(145deg, rgba(76, 175, 80, 0.15), rgba(56, 142, 60, 0.15));
+    border: 2px solid rgba(76, 175, 80, 0.5);
+    border-radius: 10px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+.spell-card:hover {
+    border-color: rgba(255, 215, 0, 0.8);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+}
+
+.spell-card:active {
+    transform: translateY(0);
+}
+
+/* Locked spell */
+.spell-card.locked {
+    background: linear-gradient(145deg, rgba(100, 100, 100, 0.15), rgba(80, 80, 80, 0.15));
+    border-color: rgba(150, 150, 150, 0.3);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.spell-card.locked:hover {
+    transform: none;
+    border-color: rgba(150, 150, 150, 0.3);
+    box-shadow: none;
+}
+
+/* Currently assigned spell */
+.spell-card.assigned {
+    border-color: rgba(33, 150, 243, 0.8);
+    background: linear-gradient(145deg, rgba(33, 150, 243, 0.2), rgba(25, 118, 210, 0.2));
+}
+
+/* Spell card content */
+.spell-card-icon {
+    font-size: 2.5em;
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.spell-card-name {
+    font-weight: bold;
+    color: #fff;
+    font-size: 1em;
+    text-align: center;
+    margin-bottom: 6px;
+}
+
+.spell-card-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85em;
+    color: #bdc3c7;
+    margin-bottom: 6px;
+}
+
+.spell-card-cost {
+    color: #4fc3f7;
+}
+
+.spell-card-cooldown {
+    color: #FFD700;
+}
+
+.spell-card-desc {
+    font-size: 0.8em;
+    color: #95a5a6;
+    text-align: center;
+    line-height: 1.3;
+    margin-bottom: 6px;
+}
+
+.spell-card-unlock {
+    font-size: 0.75em;
+    color: #e74c3c;
+    text-align: center;
+    font-weight: bold;
+}
+
+/* Spellbook Actions */
+.spellbook-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 10px;
+}
+
+.spellbook-actions .menu-btn {
+    min-width: 200px;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    .spellbook-modal-content {
+        width: 95%;
+        max-height: 90vh;
+    }
+
+    .spellbook-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 10px;
+    }
+
+    .spell-card {
+        padding: 10px;
+    }
+
+    .spell-card-icon {
+        font-size: 2em;
+    }
+
+    .spell-card-name {
+        font-size: 0.9em;
+    }
+}
