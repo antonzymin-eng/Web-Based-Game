@@ -191,6 +191,18 @@ if (!ctx) {
 canvas.width = CANVAS_WIDTH;
 canvas.height = CANVAS_HEIGHT;
 
+// DEBUG: Log canvas setup
+console.log('[DEBUG] Canvas setup:', {
+    canvasFound: !!canvas,
+    ctxFound: !!ctx,
+    width: canvas.width,
+    height: canvas.height,
+    offsetWidth: canvas.offsetWidth,
+    offsetHeight: canvas.offsetHeight,
+    clientWidth: canvas.clientWidth,
+    clientHeight: canvas.clientHeight
+});
+
 // Game State
 // ============================================================================
 // SECTION 3: GAME STATE
@@ -1687,8 +1699,15 @@ function updateZoomIndicator() {
 }
 
 function loadRoom(roomIndex, skipSave = false) {
+    console.log('[DEBUG] loadRoom called:', { roomIndex, skipSave });
     gameState.currentRoom = roomIndex;
     const room = roomTemplates[roomIndex];
+    console.log('[DEBUG] Room template:', {
+        wallCount: room?.walls?.length,
+        doorCount: room?.doors?.length,
+        chestCount: room?.chests?.length,
+        enemyCount: room?.enemies?.length
+    });
 
     // Clear current entities
     gameState.walls = [];
@@ -1735,13 +1754,36 @@ function loadRoom(roomIndex, skipSave = false) {
 
     showMessage(`Entered room ${roomIndex + 1}`);
 
+    console.log('[DEBUG] Room loaded - gameState arrays:', {
+        wallsLoaded: gameState.walls.length,
+        doorsLoaded: gameState.doors.length,
+        chestsLoaded: gameState.chests.length,
+        enemiesLoaded: gameState.enemies.length,
+        firstWall: gameState.walls[0],
+        firstDoor: gameState.doors[0],
+        firstChest: gameState.chests[0]
+    });
+
     // Auto-save on room change (but not on initial load)
     if (!skipSave) {
         SaveManager.save(player, gameState);
     }
 }
 
+let _debugFirstWallDraw = true;
 function drawWalls() {
+    if (_debugFirstWallDraw && gameState.walls.length > 0) {
+        _debugFirstWallDraw = false;
+        const firstWall = gameState.walls[0];
+        console.log('[DEBUG] drawWalls first call:', {
+            totalWalls: gameState.walls.length,
+            firstWall: firstWall,
+            firstWallPixelX: firstWall.x * TILE_SIZE,
+            firstWallPixelY: firstWall.y * TILE_SIZE,
+            TILE_SIZE: TILE_SIZE,
+            ctxFillStyle: ctx.fillStyle
+        });
+    }
     for (let wall of gameState.walls) {
         ctx.fillStyle = '#34495e';
         ctx.fillRect(wall.x * TILE_SIZE, wall.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
@@ -3516,6 +3558,16 @@ function setupViewportControls() {
 
 // Initialize game
 function initGame() {
+    console.log('[DEBUG] initGame() called');
+    console.log('[DEBUG] Pre-gameLoop state:', {
+        wallsCount: gameState.walls.length,
+        doorsCount: gameState.doors.length,
+        chestsCount: gameState.chests.length,
+        enemiesCount: gameState.enemies.length,
+        currentRoom: gameState.currentRoom,
+        canvasInDOM: !!document.getElementById('gameCanvas'),
+        canvasDisplayed: canvas.offsetWidth > 0 && canvas.offsetHeight > 0
+    });
     setupVirtualJoystick();
     const charMenuHandler = setupCharacterMenu();
     const saveMenuHandler = setupSaveMenu();
@@ -3557,7 +3609,29 @@ if (document.readyState === 'loading') {
 }
 
 // Game Loop
+let _debugFirstFrame = true;
 function gameLoop() {
+    // DEBUG: Log first frame only
+    if (_debugFirstFrame) {
+        _debugFirstFrame = false;
+        console.log('[DEBUG] gameLoop first frame:', {
+            canvasWidth: canvas.width,
+            canvasHeight: canvas.height,
+            viewportScale: viewport.scale,
+            viewportOffsetX: viewport.offsetX,
+            viewportOffsetY: viewport.offsetY,
+            wallsCount: gameState.walls.length,
+            doorsCount: gameState.doors.length,
+            chestsCount: gameState.chests.length,
+            enemiesCount: gameState.enemies.length,
+            playerX: player?.x,
+            playerY: player?.y,
+            TILE_SIZE: TILE_SIZE,
+            GRID_WIDTH: GRID_WIDTH,
+            GRID_HEIGHT: GRID_HEIGHT
+        });
+    }
+
     // Update time tracking (Phase 0: Time-based system)
     const currentTime = performance.now();
     gameState.deltaTime = currentTime - gameState.lastFrameTime;
@@ -3581,6 +3655,13 @@ function gameLoop() {
 
     // Update camera to follow player
     updateCameraFollow();
+
+    // DEBUG: Test draw a bright red rectangle at fixed position (no transforms) - only first few frames
+    if (gameState.gameTime < 5) {
+        ctx.fillStyle = '#FF0000';
+        ctx.fillRect(10, 10, 50, 50);
+        console.log('[DEBUG] Drew test red rectangle at (10,10), frame:', gameState.gameTime);
+    }
 
     // Save context state and apply viewport transformation
     ctx.save();
